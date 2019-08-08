@@ -16,6 +16,12 @@
             Let's get started, this won't take long.
         {% endblocktrans %}
     </p>
+    <p>
+      <strong>
+          Please make sure to not include any information that identifies you in this step!
+      </strong>
+      You can fill out your profile in the next step. This way we can ensure we have a proper blind selection.
+    </p>
     {% for field in wizard.form %}
     {% bootstrap_field field layout='event' %}
     {% endfor %}
