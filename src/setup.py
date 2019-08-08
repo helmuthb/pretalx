@@ -48,7 +48,7 @@ class CustomBuild(build):
         from django.core import management
 
         settings.COMPRESS_ENABLED = True
-        settings.COMPRESS_OFFLINE = True
+        settings.COMPRESS_OFFLINE = False
 
         management.call_command('compilemessages', verbosity=1)
         management.call_command('collectstatic', verbosity=1, interactive=False)

@@ -6,9 +6,9 @@
 <html{% if request.LANGUAGE_CODE %} lang="{{ request.LANGUAGE_CODE }}"{% endif %}>
 <head>
     <meta charset="utf-8">
-    <title>{% block title %}{% if request.event %}{{ request.event.name }}{% endif %}{% endblock %} :: pretalx</title>
-    <meta name="title" content="{% block meta_title %}{% endblock %} {% if request.event %} - {{ request.event.name }} {% endif %}pretalx">
-    <meta name="description" content="{% block meta_description %}{% if request.event %}Schedule, talks and talk submissions for {{ reqeuest.event.name }}{% else %}Talks and talk submissions by pretalx{% endif %}{% endblock %}">
+    <title>{% block title %}{% if request.event %}{{ request.event.name }}{% endif %}{% endblock %}</title>
+    <meta name="title" content="{% block meta_title %}{% endblock %} {% if request.event %} - {{ request.event.name }} {% endif %}">
+    <meta name="description" content="{% block meta_description %}{% if request.event %}Schedule, talks and talk submissions for {{ reqeuest.event.name }}{% else %}Talks and talk submissions{% endif %}{% endblock %}">
     <meta name="application-name" content="pretalx">
     <meta name="generator" content="pretalx">
     <meta name="keywords" content="{% if request.event %}{{ request.event.name }}, {{ request.event.slug }}, {% if request.event.date_from %}{{ request.event.date_from.year }}, {% endif %}{% endif %}schedule, talks, cfp, call for papers, conference, submissions, organizer">
@@ -379,7 +379,7 @@
                 {% endblock %}
             </main>
             <footer>
-                {% with "href='http://pretalx.com'" as a_attr %}
+                {% with "href='https://pretalx.com'" as a_attr %}
                     {% blocktrans trimmed %}
                         powered by <a {{ a_attr }}>pretalx</a>
                     {% endblocktrans %}

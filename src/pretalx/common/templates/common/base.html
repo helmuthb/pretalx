@@ -6,9 +6,9 @@
 <html{% if request.LANGUAGE_CODE %} lang="{{ request.LANGUAGE_CODE }}"{% endif %}>
 <head>
     <meta charset="utf-8">
-    <title>{% block title %}{% endblock %} {% if request.event %} {{ request.event.name }} {% endif %}:: pretalx</title>
-    <meta name="title" content="{% block meta_title %}{% endblock %} {% if request.event %} - {{ request.event.name }} {% endif %}pretalx">
-    <meta name="description" content="{% block meta_description %}{% if request.event %}Schedule, talks and talk submissions for {{ request.event.name }}{% else %}Talks and talk submissions by pretalx{% endif %}{% endblock %}">
+    <title>{% block title %}{% endblock %} {% if request.event %} {{ request.event.name }} {% endif %}</title>
+    <meta name="title" content="{% block meta_title %}{% endblock %} {% if request.event %} - {{ request.event.name }} {% endif %}">
+    <meta name="description" content="{% block meta_description %}{% if request.event %}Schedule, talks and talk submissions for {{ request.event.name }}{% else %}Talks and talk submissions{% endif %}{% endblock %}">
     <meta name="application-name" content="pretalx">
     <meta name="generator" content="pretalx">
     <meta name="keywords" content="{% if request.event %}{{ request.event.name }}, {{ request.event.slug }}, {% if request.event.date_from %}{{ request.event.date_from.year }}, {% endif %}{% endif %}schedule, talks, cfp, call for papers, conference, submissions, organizer">
@@ -20,7 +20,7 @@
     {% block meta_image %}{% if request.event and request.event.logo %}<meta property="thumbnail" content="{{ request.event.urls.logo.full }}">
     <meta property="og:image" content="{{ request.event.urls.logo.full }}">{% endif %}{% endblock %}
     <meta property="og:title" content="{% block social_title %}{% endblock %} {% if request.event %}{{ request.event.name }}{% endif %}">
-    <meta property="og:description" content="{% block social_description %}{% if request.event %}Schedule, talks and talk submissions for {{ request.event.name }}{% else %}Talks and talk submissions by pretalx{% endif %}{% endblock %}">
+    <meta property="og:description" content="{% block social_description %}{% if request.event %}Schedule, talks and talk submissions for {{ request.event.name }}{% else %}Talks and talk submissions{% endif %}{% endblock %}">
     <meta property="og:url" content="{{ request.build_absolute_uri }}">
     <meta property="twitter:card" content="summary">
 
@@ -141,7 +141,7 @@
                 {% endblocktrans %}
             </div>
             {% endif %}
-            <a href="http://pretalx.com" target="_blank" rel="noopener">
+            <a href="https://pretalx.com" target="_blank" rel="noopener">
                 <img src="{% static "common/img/logo.svg" %}" alt="{% trans "The pretalx logo" %}">
             </a>
             {% if request.event %}

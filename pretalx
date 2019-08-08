@@ -1,0 +1,30 @@
+#! /bin/sh
+
+# Start script for pretalx
+
+cd /pretalx/src
+export HOME=/pretalx
+
+# preconditions
+[ -d /data/logs ]  || mkdir /data/logs
+[ -d /data/media ] || mkdir /data/media
+
+# 1. migrate
+python3 -m pretalx migrate --noinput
+
+# 2. collect statics & compress offline
+python3 -m pretalx collectstatic --noinput
+python3 -m pretalx compress 
+
+# 3. start NGINX proxy
+sudo /usr/sbin/nginx -c /nginx/nginx.conf
+
+# 4. start pretalx application
+exec gunicorn pretalx.wsgi \
+  --name pretalx \
+  --workers ${NUM_WORKERS:=2} \
+  --max-requests 1200 \
+  --max-requests-jitter 50 \
+  --log-level=info \
+  --bind 127.0.0.1:8001
+
