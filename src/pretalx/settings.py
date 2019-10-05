@@ -57,8 +57,8 @@ DJANGO_APPS = [
 EXTERNAL_APPS = [
     'compressor',
     'djangoformsetjs',
+    'django_filters',
     'jquery',
-    'rest_framework',
     'rest_framework.authtoken',
     'rules',
 ]
@@ -74,7 +74,11 @@ LOCAL_APPS = [
     'pretalx.cfp',
     'pretalx.orga',
 ]
-FALLBACK_APPS = ['bootstrap4', 'django.forms']
+FALLBACK_APPS = [
+    'bootstrap4',
+    'django.forms',
+    'rest_framework',
+]
 INSTALLED_APPS = DJANGO_APPS + EXTERNAL_APPS + LOCAL_APPS + FALLBACK_APPS
 
 PLUGINS = []
@@ -83,6 +87,13 @@ for entry_point in iter_entry_points(group='pretalx.plugin', name=None):
     INSTALLED_APPS.append(entry_point.module_name)
 
 CORE_MODULES = LOCAL_APPS + [module for module in config.get('site', 'core_modules').split(',') if module]
+
+
+## PLUGIN SETTINGS
+PLUGIN_SETTINGS = dict()
+for section in config.sections():
+    if section.startswith('plugin:'):
+        PLUGIN_SETTINGS[section[len('plugin:'):]] = dict(config.items(section))
 
 
 ## URL SETTINGS
@@ -427,7 +438,10 @@ COMPRESS_CSS_FILTERS = (
 )
 
 REST_FRAMEWORK = {
-    'DEFAULT_RENDERER_CLASSES': ('i18nfield.rest_framework.I18nJSONRenderer',),
+    'DEFAULT_RENDERER_CLASSES': (
+        'i18nfield.rest_framework.I18nJSONRenderer',
+        'rest_framework.renderers.BrowsableAPIRenderer',
+    ),
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework.authentication.TokenAuthentication',
         'rest_framework.authentication.SessionAuthentication',
@@ -445,9 +459,6 @@ REST_FRAMEWORK = {
     'DATETIME_FORMAT': 'iso-8601',
 }
 if DEBUG:
-    REST_FRAMEWORK['DEFAULT_RENDERER_CLASSES'] += (
-        'rest_framework.renderers.BrowsableAPIRenderer',
-    )
     REST_FRAMEWORK['COMPACT_JSON'] = False
 
 WSGI_APPLICATION = 'pretalx.wsgi.application'

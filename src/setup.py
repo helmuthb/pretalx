@@ -56,19 +56,22 @@ class CustomBuild(build):
         build.run(self)
 
 
-cmdclass = {'build': CustomBuild}
-
-
 setup(
     name='pretalx',
     version=pretalx_version,
-    python_requires='>={}.{}'.format(*REQUIRED_PYTHON),
+    license='Apache License 2.0',
+
     description='Conference organisation: CfPs, scheduling, much more',
     long_description=long_description,
-    url='https://pretalx.com',
     author='Tobias Kunze',
     author_email='r@rixx.de',
-    license='Apache License 2.0',
+
+    url='https://pretalx.com',
+    project_urls={
+        'Documentation': 'https://docs.pretalx.org',
+        'Source': 'https://github.com/pretalx/pretalx',
+        'Issues': 'https://github.com/pretalx/pretalx/issues',
+    },
     classifiers=[
         'Development Status :: 5 - Production/Stable',
         'Environment :: Web Environment',
@@ -83,7 +86,9 @@ setup(
         'Programming Language :: Python :: 3.7',
         'Topic :: Internet :: WWW/HTTP :: Dynamic Content',
     ],
-    keywords='conference cfp event barcamp',
+    keywords='conference cfp event schedule',
+
+    python_requires='>={}.{}'.format(*REQUIRED_PYTHON),
     install_requires=[
         'beautifulsoup4==4.8.*',  # https://bazaar.launchpad.net/~leonardr/beautifulsoup/bs4/view/head:/CHANGELOG
         'bleach==3.1.*',  # https://bleach.readthedocs.io/en/latest/changes.html
@@ -99,7 +104,7 @@ setup(
         'django-formset-js-improved==0.5.0.2',  # no changelog, https://github.com/pretix/django-formset-js
         'django-formtools==2.1.*',  # http://django-formtools.readthedocs.io/en/latest/changelog.html
         'django-hierarkey==1.0.*',  # no changelog, https://github.com/raphaelm/django-hierarkey
-        'django-i18nfield>=1.5,<1.6',  # 2017-11, no changelog, https://github.com/raphaelm/django-i18nfield/
+        'django-i18nfield==1.6.*',  # 2017-11, no changelog, https://github.com/raphaelm/django-i18nfield/
         'django-libsass==0.7',  # inactive, https://github.com/torchbox/django-libsass/blob/master/CHANGELOG.txt
         'django-scopes==1.2.*',  # https://github.com/raphaelm/django-scopes/releases
         'djangorestframework==3.10.*',  # http://www.django-rest-framework.org/topics/release-notes/
@@ -111,15 +116,15 @@ setup(
         'pytz',
         'qrcode==6.1',  # https://github.com/lincolnloop/python-qrcode/blob/master/CHANGES.rst
         'reportlab==3.5.*',  # https://www.reportlab.com/documentation/relnotes/
-        'requests',  # http://docs.python-requests.org/en/master/community/updates/#release-history
-        'rules==2.0.*',  # https://github.com/dfunckt/django-rules/blob/master/CHANGELOG.md
-        'urlman==1.2.*',  # https://github.com/andrewgodwin/urlman/blob/master/CHANGELOG
+        'rules==2.1.*',  # https://github.com/dfunckt/django-rules/blob/master/CHANGELOG.md
+        'urlman==1.3.*',  # https://github.com/andrewgodwin/urlman/blob/master/CHANGELOG
         'vobject==0.9.*',  # 2017-06, http://eventable.github.io/vobject/ look for "release"
         'whitenoise==4.1.*',  # http://whitenoise.evans.io/en/stable/changelog.html
         'zxcvbn==4.4.*',  # Nothing? https://github.com/dwolfhub/zxcvbn-python/issues/38
     ],
     extras_require={
         'dev': [
+            'docformatter',
             'isort',
             'lxml',
             'pylama',
@@ -130,16 +135,21 @@ setup(
             'pytest-rerunfailures',
             'pytest-sugar',
             'pytest-tldr',
+            'semantic-version==2.6.0',  # https://github.com/bitprophet/releases/issues/84
+            'urllib3',
         ],
         'mysql': ['mysqlclient'],
         'postgres': ['psycopg2-binary'],
         'redis': [
             'django_redis==4.10.*',
-            'redis==3.2.*',
+            'redis==3.3.*',
         ],
     },
+
     packages=find_packages(exclude=['tests', 'tests.*']),
     include_package_data=True,
+    data_files=[('.', ['../LICENSE', '../README.rst'])],
     zip_safe=False,
-    cmdclass=cmdclass,
+
+    cmdclass={'build': CustomBuild},
 )

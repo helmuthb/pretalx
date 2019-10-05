@@ -1,9 +1,12 @@
 from rest_framework.serializers import ModelSerializer
+from urlman import UrlManField
 
 from pretalx.event.models import Event
 
 
 class EventSerializer(ModelSerializer):
+    urls = UrlManField(urls=['base', 'schedule', 'login', 'feed'])
+
     class Meta:
         model = Event
         fields = (
@@ -13,5 +16,5 @@ class EventSerializer(ModelSerializer):
             'date_from',
             'date_to',
             'timezone',
-            'html_export_url',
+            'urls',
         )
