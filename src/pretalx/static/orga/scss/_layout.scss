@@ -1,3 +1,9 @@
+body {
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
 #wrapper {
   display: flex;
   flex-direction: column;
@@ -8,33 +14,50 @@
   display: flex;
   flex-direction: row;
   flex-grow: 1;
+  max-width: 100%;
 }
 
 #page-content {
   background: $white;
   flex-grow: 1;
+  max-width: 100%;
   padding: 20px 40px;
-  margin-left: 250px;
+  margin: 0;
   margin-top: 50px;
+  height: calc(100vh - 50px);
+  overflow-x: hidden;
+  overflow-y: auto;
+
+  .flex-content {
+    max-width: 100%;
+  }
 }
 
 aside.sidebar {
   background-color: $gray-lightest;
-  width: 250px;
+  width: 45px;
   height: 100vh;
   font-size: 14px;
   flex-grow: 0;
   flex-shrink: 0;
   flex-wrap: nowrap;
-  border-right: 1px solid $gray-lighter;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24);
-  z-index: 100;
-  position: fixed;
+  z-index: 150;
   margin-top: 50px;
   overflow-y: auto;
 
+  &.sidebar-uncollapsed, &:hover {
+    width: 250px;
+    a.nav-link i + span {
+      display: inline-block
+    }
+    .nav-fold div > a {
+      display: block
+    }
+  }
+
   a {
-    color: $brand-primary;
+    color: $body-color-light;
+    font-weight: bold;
   }
 
   .nav-fold span.has-children {
@@ -61,6 +84,9 @@ aside.sidebar {
   .nav-link,
   .nav-fold {
     border-top: 1px solid $gray-light;
+    div > a {
+      display: none;
+    }
   }
 
   .nav-link {
@@ -76,6 +102,10 @@ aside.sidebar {
       margin-right: 5px;
     }
 
+    i + span {
+      display: none;
+    }
+
     &.nav-link-second-level span {
       padding-left: 1.6em;
     }
@@ -88,11 +118,14 @@ aside.sidebar {
   }
 
   .nav-link.active,
-  .nav-link:hover,
+  .nav-link.active:hover,
   .nav-link.nav-link-second-level.active,
+  .nav-link.nav-link-second-level.active:hover {
+    background-color: fade-out($brand-primary, 0.8);
+  }
+  .nav-link:hover,
   .nav-link.nav-link-second-level:hover {
     background-color: $gray-lighter;
-    color: $brand-primary;
   }
 }
 
@@ -124,6 +157,8 @@ aside.sidebar {
     width: 300px;
     z-index: 0;
     background: $offwhite;
+    max-height: 500px;
+    overflow-y: auto;
     li {
       border-top: $gray-light 1px solid;
       &:hover,
@@ -161,10 +196,15 @@ aside.sidebar {
       overflow: hidden;
     }
 
+    .event-name {
+      font-family: "Titillium Web";
+      font-weight: 600;
+    }
+
     .event-date,
     .event-organiser {
       font-size: 11px;
-      color: $gray;
+      color: $body-color-light;
     }
   }
   a {
@@ -172,10 +212,14 @@ aside.sidebar {
   }
 }
 
-.navbar-brand img {
-  height: 30px;
-  width: auto;
-  margin: auto;
+.navbar-brand {
+  font-family: "Titillium Web";
+  font-weight: 600;
+  img {
+    height: 30px;
+    width: auto;
+    margin: auto;
+  }
 }
 
 .speaker-info {
@@ -278,16 +322,19 @@ footer {
   background-color: $white !important;
 }
 
+.search-submit-group {
+  padding-bottom: 0;
+}
 .search-form {
   display: flex;
   flex-wrap: wrap;
-  margin-bottom: 1rem;
   align-content: center;
+  width: 100%;
 
-  .form-group {
-    min-width: 300px;
+  & > .form-group {
+    width: 300px;
     display: flex;
-    margin: 8px;
+    margin-right: 16px;
 
     [type="text"] {
       height: 2.25rem;
@@ -296,21 +343,40 @@ footer {
     label {
       display: none;
     }
+    .form-control.is-valid {
+      background-image: none;
+    }
   }
 
-  .btn {
+  .btn, details {
     align-self: flex-start;
-    margin-top: 8px;
-    margin-left: 8px;
+    margin-top: auto;
+    margin-bottom: 16px;
+  }
+  .btn {
+    margin-right: 16px;
+    margin-left: auto;
+  }
+  #pending .form-group {
+    margin-bottom: 0
+  }
+  #pending label {
+    color: #6c757d;
   }
 }
-
+.filter-form {
+  .form-group {
+    margin-right: 8px;
+    .form-control.is-valid {
+      background-image: none;
+    }
+  }
+}
 .resource-option-row,
 .resource-option-input {
   display: flex;
   flex-direction: row;
   width: 100%;
-  margin-left: 8px;
 
   .resource-option-delete {
     float: right;
@@ -321,6 +387,8 @@ footer {
   .form-group {
     display: flex;
     padding-right: 16px;
+    margin-bottom: 0;
+    margin-top: 2px;
 
     .bootstrap-multi-input {
       flex-grow: 1;
@@ -333,53 +401,30 @@ footer {
   }
 }
 
-.avatar-form {
-  display: flex;
-  align-items: flex-start;
-  padding-bottom: 8px;
-
-  img.avatar {
-    max-width: 100%;
-    height: auto;
-  }
-
-  .avatar-form-fields {
-    display: flex;
-    flex-direction: column;
-
-    .bootstrap4-multi-input,
-    .bootstrap4-multi-input > .col-12 {
-      margin: 0;
-      padding: 0;
-    }
-
-    .form-group {
-      display: flex;
-      flex-direction: column;
-    }
-
-    .user-avatar-display .form-group {
-      margin-bottom: 0;
-    }
-  }
+.input-group-text.input-group-append {
+  padding: 0 0.75rem;
 }
 
 .event-logo-field {
+  .event-logo-form-fields .form-group {
+    display: inline-block;
+    max-width: 100%;
+    a {
+      word-wrap: break-word;
+    }
+  }
   img.event-logo-display {
-    margin-left: 12px;
-    margin-right: 16px;
     padding: 2px;
     border: 1px solid $gray-light;
     max-width: 180px;
+    background-size: 21px 21px;
+    background-position: 0 0, 10px 10px;
+    background-image: linear-gradient(45deg,#efefef 25%,rgba(239,239,239,0) 25%,rgba(239,239,239,0) 75%,#efefef 75%,#efefef),linear-gradient(45deg,#efefef 25%,rgba(239,239,239,0) 25%,rgba(239,239,239,0) 75%,#efefef 75%,#efefef)
   }
 }
 
 .bootstrap4-multi-input {
   margin: auto;
-}
-
-.override {
-  padding-left: 4px;
 }
 
 .history-sidebar {
@@ -440,10 +485,6 @@ footer {
     width: 100%;
   }
 
-  .flex-content {
-    max-width: 100%;
-  }
-
   .navbar {
     padding: 0.1rem 1rem;
 
@@ -453,6 +494,7 @@ footer {
       .fa {
         padding-left: 12px;
         padding-right: 12px;
+        margin-top: 0;
       }
     }
   }
@@ -473,7 +515,7 @@ footer {
     /* display above timeline in dashboard */
   }
 
-  fieldset .alert.col-md-9.offset-3 {
+  fieldset .alert.col-md-9.offset-md-3 {
     margin: 0;
   }
 
@@ -507,6 +549,17 @@ footer {
       padding-left: 4px;
     }
   }
+  .dashboard-history .list-group .logentry {
+    flex-direction: column;
+    border-bottom: 1px solid $gray-light;
+    padding-top: 16px;
+    .meta {
+      flex-direction: column;
+      .time {
+        padding-bottom: 16px;
+      }
+    }
+  }
 }
 
 td.reviewer {
@@ -514,10 +567,15 @@ td.reviewer {
   flex-direction: row;
 }
 
-form #id_settings-display_header_pattern,
-form #id_display-display_header_pattern {
+form #id_header_pattern,
+form #id_display-header_pattern {
   display: flex;
   padding: 0;
+  overflow-x: auto;
+
+  .form-check {
+    padding-left: 0;
+  }
 
   label {
     width: 100px;
@@ -538,7 +596,7 @@ form #id_display-display_header_pattern {
   .mini-header {
     width: 100px;
     height: 100px;
-    background-color: $brand-primary;
+    background-color: var(--color, $brand-primary);
   }
 }
 
@@ -570,83 +628,122 @@ form #id_display-display_header_pattern {
   }
 }
 
-legend .submission-state-dropdown {
-  padding: 8px;
-
-  button,
-  a {
-    font-size: 16px;
-  }
+h2 .submission-state-dropdown {
+  padding: 4px;
 }
 
 .submission-state-dropdown {
   display: inline-block;
+  border-radius: 6px;
+  background-image: repeating-linear-gradient(315deg, var(--submission-color-primary), var(--submission-color-primary) 8px, var(--submission-color-secondary) 8px, var(--submission-color-secondary) 16px);
+  padding: 3px;
 
-  button.dropdown-toggle,
+  summary {
+    background-color: white;
+    border-radius: 3px;
+    padding: 0.25rem 0.5rem;
+    line-height: 1.5;
+    display: flex;
+    align-items: center;
+    h4 {
+      font-size: 0.875rem;
+      font-weight: 400;
+      margin-bottom: 0;
+      display: inline-flex;
+      padding: 4px 0 3px 0;
+      align-items: baseline;
+    }
+
+    i.fa:first-child {
+      padding: 0 6px 0 3px;
+    }
+    i.fa.fa-caret-down {
+      margin-left: 10px;
+    }
+  }
+  &:hover summary {
+    background-color:inherit;
+    color: inherit;
+  }
+
   a {
     font-weight: bold;
-    border-width: 3px;
+    font-size: 16px;
   }
-}
-.submission-dropdown-menu {
-  padding: 0;
 }
 
 .submission-state-deleted,
 .submission-state-withdrawn,
 .submission-state-canceled {
   color: $gray;
-  border-color: $gray;
+  --submission-color-primary: #{$gray};
+  --submission-color-secondary: #{$gray};
+}
+.submission-state-dropdown.submission-state-pending-deleted,
+.submission-state-dropdown.submission-state-pending-withdrawn,
+.submission-state-dropdown.submission-state-pending-canceled {
+  --submission-color-secondary: #{$gray};
 }
 .submission-state-deleted:hover,
 .submission-state-withdrawn:hover,
 .submission-state-canceled:hover {
   color: $white;
   background-color: $gray;
-  border-color: $gray;
 }
 
 .submission-state-submitted {
   color: $brand-info;
-  border-color: $brand-info;
   background-color: $white;
+  --submission-color-primary: #{$brand-info};
+  --submission-color-secondary: #{$brand-info};
+}
+.submission-state-dropdown.submission-state-pending-submitted {
+  --submission-color-secondary: #{$brand-info};
 }
 .submission-state-submitted:hover {
   color: $white;
   background-color: $brand-info;
-  border-color: $brand-info;
 }
 
 .submission-state-accepted {
   color: lighten($brand-success, 10%);
-  border-color: lighten($brand-success, 10%);
   background-color: $white;
+  --submission-color-primary: #{lighten($brand-success, 10%)};
+  --submission-color-secondary: #{lighten($brand-success, 10%)};
+}
+.submission-state-dropdown.submission-state-pending-accepted {
+  --submission-color-secondary: #{lighten($brand-success, 10%)};
 }
 .submission-state-accepted:hover {
   background-color: lighten($brand-success, 10%);
-  border-color: lighten($brand-success, 10%);
   color: $white;
 }
 
 .submission-state-confirmed {
   color: lighten($brand-primary, 10%);
-  border-color: lighten($brand-primary, 10%);
   background-color: $white;
+  --submission-color-primary: #{lighten($brand-primary, 10%)};
+  --submission-color-secondary: #{lighten($brand-primary, 10%)};
+}
+.submission-state-dropdown.submission-state-pending-confirmed {
+  --submission-color-secondary: #{lighten($brand-primary, 10%)};
 }
 .submission-state-confirmed:hover {
   color: $white;
-  border-color: lighten($brand-primary, 10%);
   background-color: lighten($brand-primary, 10%);
 }
 
 .submission-state-rejected {
   color: $danger;
-  border-color: $danger;
   background-color: $white;
+  --submission-color-primary: #{$danger};
+  --submission-color-secondary: #{$danger};
+}
+.submission-state-dropdown.submission-state-pending-rejected {
+  --submission-color-secondary: #{$danger};
 }
 .submission-state-rejected:hover {
   color: $white;
-  border-color: $danger;
   background-color: $danger;
 }
 
@@ -657,18 +754,9 @@ legend .submission-state-dropdown {
     margin-bottom: 4px;
     display: flex;
     align-content: center;
-    .form-check {
-      width: 100%;
-    }
     input {
       margin-left: auto;
       margin-right: auto;
-    }
-    .form-check-label {
-      position: relative;
-      &::after {
-        top: 0;
-      }
     }
   }
   small {
@@ -692,19 +780,39 @@ legend .submission-state-dropdown {
     padding-top: 16px;
     line-height: 2.5;
   }
+  tr th:first-child {
+    max-width: 200px
+  }
 }
-#id_locales .checkbox,
-#id_initial-locales .checkbox {
-  display: flex;
-  margin-left: 8px;
+#id_locales.checkbox,
+#id_initial-locales.checkbox,
+#id_tags {
+  padding: 0;
+  label {
+    display: inline-block !important;
+    margin-bottom: 8px;
+  }
+}
+.tag-widget-wrapper label {
+  border: 2px solid;
+  border-color: var(--tag-color);
+  padding: 0 8px;
+  border-radius: 14px;
 }
 .colorpicker-element .colorpicker-input-addon {
   display: flex;
-  width: 32px;
+  width: 36px;
   align-items: center;
   justify-content: space-around;
   background: #dfe4e6;
   border: 1px solid #ced4da;
+  border-top-left-radius: 4px;
+  border-bottom-left-radius: 4px;
+  i {
+    border-radius: 2px;
+    width: 18px;
+    height: 18px;
+  }
 }
 .colorpicker-2x {
   width: auto !important;
@@ -751,8 +859,11 @@ legend .submission-state-dropdown {
   border: 2px solid $gray-light;
   margin-right: 2px;
 }
-.phase-option-row .row {
+.phase-option-row .row, .score-row .row {
   margin-bottom: 8px;
+  .text-right input {
+    text-align: right;
+  }
 }
 #stats {
   display: flex;
@@ -838,25 +949,50 @@ legend .submission-state-dropdown {
   }
 }
 #question-stats {
+  display: flex;
+  flex-wrap: wrap;
   .table {
     width: auto;
     padding: 16px;
   }
-  .card {
-    min-height: 300px;
-    min-width: 450px;
-    max-width: 450px;
-    max-height: 450px;
-    margin-right: 16px;
+  #question-answers {
+    margin-right: 32px;
   }
 }
 #release #id_version {
   height: auto;
 }
+#review-filter-form {
+  #range-wrapper {
+    margin-right: 48px;
+    padding-left: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    label {
+      color: #495057;
+      font-size: 1rem;
+    }
+    .rs-container {
+      font-family: inherit;
+      color: #495057;
+      .rs-selected {
+        background-color: $brand-primary;
+      }
+    }
+  }
+  #column-select {
+    li.dropdown-item {
+      padding-left: 48px;
+      margin-top: 8px;
+    }
+  }
+
+}
 .review-table.table {
   thead th {
     position: sticky;
-    top: 50px;
+    top: 0;  // can't be sticky due to scroll containers, but we keep the sticky to make the &:after work
     background-color: white;
     border-bottom: none;
     z-index: 50;
@@ -876,7 +1012,7 @@ legend .submission-state-dropdown {
   thead tr {
     .unmark-radio {
       opacity: 0;
-      margin-top: -4px;
+      margin-top: 1px;
       color: $gray-500;
       font-size: 16px;
     }
@@ -912,9 +1048,14 @@ legend .submission-state-dropdown {
     &:first-child td {
       border-top: none;
     }
+    .form-check {
+      width: 40px;
+      padding: 4px;
+      padding-top: 0;
+    }
   }
 }
-.review-table + #submitBar {
+#submitBar {
   display: flex;
   justify-content: flex-end;
   align-items: baseline;
@@ -953,5 +1094,110 @@ main .progress {
     position: absolute;
     text-align: center;
     width: 100%;
+    top: 50%;
+  }
+}
+#anonymise {
+  display: flex;
+  flex-direction: column;
+  > div {
+    display: flex;
+    flex-wrap: wrap;
+    flex-direction: row;
+    > div {
+      flex-grow: 1;
+      min-width: 300px;
+      width: 48%;
+    }
+  }
+}
+#anon-menu {
+  position: absolute;
+  margin-top: -48px;
+  margin-right: 42px;
+  right: 0;
+
+  button {
+    padding: 0;
+    margin: 0;
+    border: none;
+    background-color: rgba(0, 0, 0, 0.72);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 8px;
+    position: relative;
+    &:after {
+      width: 0;
+      height: 0;
+      border-left: 12px solid transparent;
+      border-right: 12px solid transparent;
+      content: " ";
+      border-top: 12px solid rgba(0, 0, 0, 0.72);
+      position: absolute;
+      right: 70%;
+      bottom: -12px;
+    }
+  }
+}
+.hide-label {
+  label {
+    display: none;
+  }
+}
+.mail-preview-group {
+  margin-bottom: -15px;
+}
+div.mail-preview {
+  border: 1px solid #ccc;
+  border-top-width: 1px;
+  border-radius: 3px;
+  padding: 4px 36px;
+
+  .placeholder {
+    background: transparentize($brand-primary, 0.7);
+  }
+}
+
+.mail-preview-group div[lang] {
+  @include border-top-radius(0px);
+  @include border-bottom-radius(0px);
+  border-top-width: 0;
+  margin-bottom: 0;
+  padding-right: 15px;
+  padding-bottom: 15px;
+
+  &:first-child {
+    @include border-top-radius($input-border-radius);
+    border-top-width: 1px;
+  }
+  &:last-child {
+    @include border-bottom-radius($input-border-radius);
+    margin-bottom: 20px;
+  }
+  h2, h3 {
+    margin-bottom: 20px;
+    margin-top: 10px;
+  }
+  p {
+    margin: 0 0 10px;
+
+    /* These are technically the same, but use both */
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+
+    -ms-word-break: break-all;
+    /* This is the dangerous one in WebKit, as it breaks things wherever */
+    word-break: break-all;
+    /* Instead use this non-standard one: */
+    word-break: break-word;
+
+    /* Adds a hyphen where the word breaks, if supported (No Blink) */
+    -ms-hyphens: auto;
+    -moz-hyphens: auto;
+    -webkit-hyphens: auto;
+    hyphens: auto;
+  }
+  p:last-child {
+    margin-bottom: 0;
   }
 }

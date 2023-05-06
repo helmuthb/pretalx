@@ -1,30 +1,37 @@
 {% extends "cfp/event/submission_base.html" %}
 {% load bootstrap4 %}
+{% load compress %}
 {% load i18n %}
 {% load orga_edit_link %}
 {% load rules %}
+{% load rich_text %}
+{% load static %}
+
+{% block cfp_submission_header %}
+    {% compress js %}
+        <script defer src="{% static "vendored/datetimepicker/bootstrap-datetimepicker.js" %}"></script>
+        <script defer src="{% static "orga/js/datetimepicker.js" %}"></script>
+    {% endcompress %}
+{% endblock %}
 
 {% block inner %}
     <div class="d-flex">
-        <h2>{% trans "Tell us more!" %}</h2>
+        <h2>{{ title }}</h2>
         {% has_perm 'orga.edit_cfp' request.user request.event as can_edit_cfp %}
         {% if can_edit_cfp %}{% orga_edit_link request.event.cfp.urls.questions %}{% endif %}
     </div>
     <p>
-        {% blocktrans trimmed with step=wizard.steps.step1 steps=wizard.steps.count %}
-            Before we can save your submission, we have some more questions for you.
-            But rest assured, you reached step {{ step }} of {{ steps }} already, we are nearly there!
-        {% endblocktrans %}
+        {{ text|rich_text }}
     </p>
-    {% if wizard.form.submission_fields %}
-    <h4>{% trans "… about your submission:" %}</h4>
-        {% for field in wizard.form.submission_fields %}
+    {% if form.submission_fields %}
+        <h4>{% translate "… about your proposal:" %}</h4>
+        {% for field in form.submission_fields %}
             {% bootstrap_field field layout='event' %}
         {% endfor %}
     {% endif %}
-    {% if wizard.form.speaker_fields %}
-        <h4>{% trans "… about yourself:" %}</h4>
-        {% for field in wizard.form.speaker_fields %}
+    {% if form.speaker_fields %}
+        <h4>{% translate "… about yourself:" %}</h4>
+        {% for field in form.speaker_fields %}
             {% bootstrap_field field layout='event' %}
         {% endfor %}
     {% endif %}

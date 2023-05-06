@@ -2,10 +2,12 @@ import time
 from urllib.parse import urljoin, urlparse
 
 from django.conf import settings
+from django.contrib.sessions.backends.base import UpdateError
 from django.contrib.sessions.middleware import (
     SessionMiddleware as BaseSessionMiddleware,
 )
 from django.core.exceptions import DisallowedHost
+from django.db.models import Q
 from django.http.request import split_domain_port
 from django.middleware.csrf import CsrfViewMiddleware as BaseCsrfMiddleware
 from django.shortcuts import get_object_or_404, redirect
@@ -13,10 +15,10 @@ from django.urls import resolve
 from django.utils.cache import patch_vary_headers
 from django.utils.http import http_date
 
-from pretalx.event.models import Event
+from pretalx.event.models.event import Event
 
-LOCAL_HOST_NAMES = ('testserver', 'localhost')
-ANY_DOMAIN_ALLOWED = ('robots.txt', 'root.main')
+LOCAL_HOST_NAMES = ("testserver", "localhost")
+ANY_DOMAIN_ALLOWED = ("robots.txt",)
 
 
 class MultiDomainMiddleware:
@@ -26,16 +28,16 @@ class MultiDomainMiddleware:
     @staticmethod
     def get_host(request):
         # We try three options, in order of decreasing preference.
-        if settings.USE_X_FORWARDED_HOST and ('X-Forwarded-Host' in request.headers):
-            host = request.headers['X-Forwarded-Host']
-        elif 'Host' in request.headers:
-            host = request.headers['Host']
+        if settings.USE_X_FORWARDED_HOST and ("X-Forwarded-Host" in request.headers):
+            host = request.headers["X-Forwarded-Host"]
+        elif "Host" in request.headers:
+            host = request.headers["Host"]
         else:
             # Reconstruct the host using the algorithm from PEP 333.
-            host = request.META['SERVER_NAME']
-            server_port = str(request.META['SERVER_PORT'])
-            if server_port != ('443' if request.is_secure() else '80'):
-                host = f'{host}:{server_port}'
+            host = request.META["SERVER_NAME"]
+            server_port = str(request.META["SERVER_PORT"])
+            if server_port != ("443" if request.is_secure() else "80"):
+                host = f"{host}:{server_port}"
         return host
 
     def process_request(self, request):
@@ -46,31 +48,44 @@ class MultiDomainMiddleware:
         request.uses_custom_domain = False
 
         resolved = resolve(request.path)
-        if resolved.url_name in ANY_DOMAIN_ALLOWED or request.path.startswith('/api/'):
-            return
-        event_slug = resolved.kwargs.get('event')
+        if resolved.url_name in ANY_DOMAIN_ALLOWED or request.path.startswith("/api/"):
+            return None
+        event_slug = resolved.kwargs.get("event")
         if event_slug:
             event = get_object_or_404(Event, slug__iexact=event_slug)
             request.event = event
-            if event.settings.custom_domain:
-                custom_domain = urlparse(event.settings.custom_domain)
+            if event.custom_domain:
+                custom_domain = urlparse(event.custom_domain)
                 event_domain, event_port = split_domain_port(custom_domain.netloc)
                 if event_domain == domain and event_port == port:
                     request.uses_custom_domain = True
-                    return
+                    return None
 
         default_domain, default_port = split_domain_port(settings.SITE_NETLOC)
         if domain == default_domain:
-            return
+            return None
 
         if settings.DEBUG or domain in LOCAL_HOST_NAMES:
-            return
+            return None
 
-        if request.path.startswith('/orga'):
+        if request.path.startswith("/orga"):  # pragma: no cover
             if default_port not in (80, 443):
-                default_domain = f'{default_domain}:{default_port}'
+                default_domain = f"{default_domain}:{default_port}"
             return redirect(urljoin(default_domain, request.get_full_path()))
-        raise DisallowedHost(f'Unknown host: {host}')
+
+        # If this domain is used as custom domain, redirect to most recent event
+        event = (
+            Event.objects.filter(
+                Q(custom_domain=f"{request.scheme}://{domain}")
+                | Q(custom_domain=f"{request.scheme}://{host}"),
+                is_public=True,
+            )
+            .order_by("-date_from")
+            .first()
+        )
+        if event:
+            return redirect(event.urls.base.full())
+        raise DisallowedHost(f"Unknown host: {host}")
 
     def __call__(self, request):
         response = self.process_request(request)
@@ -85,23 +100,15 @@ class SessionMiddleware(BaseSessionMiddleware):
     """
 
     def __init__(self, get_response, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, get_response=get_response, **kwargs)
         self.get_response = get_response
-
-    def process_request(self, request):
-        super().process_request(request)
-
-        if not request.session.session_key:
-            # We need to create session even if we do not yet store something there, because we need the session
-            # key for e.g. saving the user's cart
-            request.session.create()
 
     def process_response(self, request, response):
         try:
             accessed = request.session.accessed
             modified = request.session.modified
             empty = request.session.is_empty()
-        except AttributeError:
+        except AttributeError:  # pragma: no cover
             pass
         else:
             # First check if we need to delete this cookie.
@@ -110,7 +117,7 @@ class SessionMiddleware(BaseSessionMiddleware):
                 response.delete_cookie(settings.SESSION_COOKIE_NAME)
                 return response
             if accessed:
-                patch_vary_headers(response, ('Cookie',))
+                patch_vary_headers(response, ("Cookie",))
             if modified or settings.SESSION_SAVE_EVERY_REQUEST:
                 max_age = None
                 expires = None
@@ -121,7 +128,10 @@ class SessionMiddleware(BaseSessionMiddleware):
                 # Save the session data and refresh the client cookie.
                 # Skip session save for 500 responses, refs #3881.
                 if response.status_code != 500:
-                    request.session.save()
+                    try:
+                        request.session.save()
+                    except UpdateError:  # pragma: no cover
+                        request.session.create()
                     response.set_cookie(
                         settings.SESSION_COOKIE_NAME,
                         request.session.session_key,
@@ -129,7 +139,7 @@ class SessionMiddleware(BaseSessionMiddleware):
                         expires=expires,
                         domain=get_cookie_domain(request),
                         path=settings.SESSION_COOKIE_PATH,
-                        secure=request.scheme == 'https',
+                        secure=request.scheme == "https",
                         httponly=settings.SESSION_COOKIE_HTTPONLY or None,
                     )
         return response
@@ -148,35 +158,33 @@ class CsrfViewMiddleware(BaseCsrfMiddleware):
     """
 
     def __init__(self, get_response, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, get_response=get_response, **kwargs)
         self.get_response = get_response
 
     def process_response(self, request, response):
-        if getattr(response, 'csrf_processing_done', False):
-            return response
-
         # If CSRF_COOKIE is unset, then CsrfViewMiddleware.process_view was
         # never called, probably because a request middleware returned a response
         # (for example, contrib.auth redirecting to a login page).
-        if request.META.get('CSRF_COOKIE') is None:
-            return response
-
-        if not request.META.get('CSRF_COOKIE_USED', False):
+        if (
+            getattr(response, "csrf_processing_done", False)
+            or (request.META.get("CSRF_COOKIE") is None)
+            or not request.META.get("CSRF_COOKIE_USED", False)
+        ):
             return response
 
         # Set the CSRF cookie even if it's already set, so we renew
         # the expiry timer.
         response.set_cookie(
             settings.CSRF_COOKIE_NAME,
-            request.META['CSRF_COOKIE'],
+            request.META["CSRF_COOKIE"],
             max_age=settings.CSRF_COOKIE_AGE,
             domain=get_cookie_domain(request),
             path=settings.CSRF_COOKIE_PATH,
-            secure=request.scheme == 'https',
+            secure=request.scheme == "https",
             httponly=settings.CSRF_COOKIE_HTTPONLY,
         )
         # Content varies with the CSRF cookie, so set the Vary header.
-        patch_vary_headers(response, ('Cookie',))
+        patch_vary_headers(response, ("Cookie",))
         response.csrf_processing_done = True
         return response
 
@@ -187,16 +195,14 @@ class CsrfViewMiddleware(BaseCsrfMiddleware):
 
 
 def get_cookie_domain(request):
-    if '.' not in request.host:
+    if "." not in request.host:
         # As per spec, browsers do not accept cookie domains without dots in it,
         # e.g. "localhost", see http://curl.haxx.se/rfc/cookie_spec.html
         return None
 
     default_domain, _ = split_domain_port(settings.SITE_NETLOC)
-    if request.host == default_domain:
-        # We are on our main domain, set the cookie domain the user has chosen
-        return settings.SESSION_COOKIE_DOMAIN
-    # We are on an organiser's custom domain, set no cookie domain, as we do not want
+    # If we are on our main domain, set the cookie domain the user has chosen. Else
+    # we are on an organiser's custom domain, set no cookie domain, as we do not want
     # the cookies to be present on any other domain. Setting an explicit value can be
     # dangerous, see http://erik.io/blog/2014/03/04/definitive-guide-to-cookie-domains/
-    return None
+    return settings.SESSION_COOKIE_DOMAIN if request.host == default_domain else None

@@ -1,10 +1,13 @@
 import contextlib
 import os
+import unicodedata
 
+from django.conf import settings
 from django.db import transaction
 from django.template.defaultfilters import date as _date
 from django.utils.crypto import get_random_string
-from django.utils.translation import get_language, gettext_lazy as _
+from django.utils.translation import activate, get_language
+from django.utils.translation import gettext_lazy as _
 from i18nfield.strings import LazyI18nString
 from i18nfield.utils import I18nJSONEncoder
 
@@ -20,6 +23,7 @@ def daterange_de(date_from, date_to):
         return "{}.–{}".format(_date(date_from, "j"), _date(date_to, "j. F Y"))
     if date_from.year == date_to.year:
         return "{} – {}".format(_date(date_from, "j. F"), _date(date_to, "j. F Y"))
+    return ""
 
 
 def daterange_en(date_from, date_to):
@@ -33,6 +37,7 @@ def daterange_en(date_from, date_to):
         return "{} – {}".format(_date(date_from, "N jS"), _date(date_to, "jS, Y"))
     if date_from.year == date_to.year:
         return "{} – {}".format(_date(date_from, "N jS"), _date(date_to, "N jS, Y"))
+    return ""
 
 
 def daterange_es(date_from, date_to):
@@ -57,19 +62,18 @@ def daterange_es(date_from, date_to):
             _date(date_to, "F"),
             _date(date_to, "Y"),
         )
+    return ""
 
 
 def daterange(date_from, date_to):
-    result = None
-    language = get_language()
-
-    if language.startswith("de"):
-        result = daterange_de(date_from, date_to)
-    elif language.startswith("en"):
-        result = daterange_en(date_from, date_to)
-    elif language.startswith("es"):
-        result = daterange_es(date_from, date_to)
-
+    language = get_language()[:2]
+    lookup = {
+        "de": daterange_de,
+        "en": daterange_en,
+        "es": daterange_es,
+    }
+    function = lookup.get(language)
+    result = function(date_from, date_to) if function else None
     return result or _("{date_from} – {date_to}").format(
         date_from=_date(date_from, "DATE_FORMAT"), date_to=_date(date_to, "DATE_FORMAT")
     )
@@ -111,5 +115,19 @@ def rolledback_transaction():
             raise DummyRollbackException()
     except DummyRollbackException:
         pass
-    else:
-        raise Exception('Invalid state, should have rolled back.')
+    else:  # pragma: no cover
+        raise Exception("Invalid state, should have rolled back.")
+
+
+@contextlib.contextmanager
+def language(language_code):
+    previous_language = get_language()
+    activate(language_code or settings.LANGUAGE_CODE)
+    try:
+        yield
+    finally:
+        activate(previous_language)
+
+
+def safe_filename(filename):
+    return unicodedata.normalize("NFD", filename).encode("ASCII", "ignore").decode()

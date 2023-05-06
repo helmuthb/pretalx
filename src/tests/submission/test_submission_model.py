@@ -1,12 +1,15 @@
 import pytest
+from django.conf import settings
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django_scopes import scope
 
-from pretalx.submission.models import Answer, SubmissionError, SubmissionStates
+from pretalx.common.exceptions import SubmissionError
+from pretalx.submission.models import Answer, Submission, SubmissionStates
 from pretalx.submission.models.submission import submission_image_path
 
 
 @pytest.mark.parametrize(
-    'state',
+    "state",
     (
         SubmissionStates.SUBMITTED,
         SubmissionStates.ACCEPTED,
@@ -24,13 +27,15 @@ def test_accept_success(submission, state):
 
         submission.accept()
         assert submission.state == SubmissionStates.ACCEPTED
-        assert submission.event.queued_mails.count() == int(state != SubmissionStates.CONFIRMED)
+        assert submission.event.queued_mails.count() == int(
+            state not in (SubmissionStates.CONFIRMED, SubmissionStates.ACCEPTED)
+        )
         assert submission.logged_actions().count() == (count + 1)
         assert submission.event.wip_schedule.talks.count() == 1
 
 
-@pytest.mark.parametrize('state', (SubmissionStates.WITHDRAWN,))
-@pytest.mark.parametrize('force', (True, False))
+@pytest.mark.parametrize("state", (SubmissionStates.WITHDRAWN,))
+@pytest.mark.parametrize("force", (True, False))
 @pytest.mark.django_db
 def test_accept_fail(submission, state, force):
     with scope(event=submission.event):
@@ -55,7 +60,7 @@ def test_accept_fail(submission, state, force):
 
 
 @pytest.mark.parametrize(
-    'state', (SubmissionStates.SUBMITTED, SubmissionStates.ACCEPTED)
+    "state", (SubmissionStates.SUBMITTED, SubmissionStates.ACCEPTED)
 )
 @pytest.mark.django_db
 def test_reject_success(submission, state):
@@ -73,10 +78,10 @@ def test_reject_success(submission, state):
 
 
 @pytest.mark.parametrize(
-    'state',
+    "state",
     (SubmissionStates.CONFIRMED, SubmissionStates.CANCELED, SubmissionStates.WITHDRAWN),
 )
-@pytest.mark.parametrize('force', (True, False))
+@pytest.mark.parametrize("force", (True, False))
 @pytest.mark.django_db
 def test_reject_fail(submission, state, force):
     with scope(event=submission.event):
@@ -101,7 +106,7 @@ def test_reject_fail(submission, state, force):
 
 
 @pytest.mark.parametrize(
-    'state', (SubmissionStates.ACCEPTED, SubmissionStates.CONFIRMED)
+    "state", (SubmissionStates.ACCEPTED, SubmissionStates.CONFIRMED)
 )
 @pytest.mark.django_db
 def test_cancel_success(submission, state):
@@ -119,7 +124,7 @@ def test_cancel_success(submission, state):
 
 
 @pytest.mark.parametrize(
-    'state',
+    "state",
     (SubmissionStates.SUBMITTED, SubmissionStates.REJECTED, SubmissionStates.WITHDRAWN),
 )
 @pytest.mark.django_db
@@ -136,7 +141,9 @@ def test_cancel_fail(submission, state):
         assert submission.logged_actions().count() == 0
 
 
-@pytest.mark.parametrize('state', (SubmissionStates.SUBMITTED, SubmissionStates.ACCEPTED))
+@pytest.mark.parametrize(
+    "state", (SubmissionStates.SUBMITTED, SubmissionStates.ACCEPTED)
+)
 @pytest.mark.django_db
 def test_withdraw_success(submission, state):
     with scope(event=submission.event):
@@ -153,7 +160,7 @@ def test_withdraw_success(submission, state):
 
 
 @pytest.mark.parametrize(
-    'state',
+    "state",
     (
         SubmissionStates.CONFIRMED,
         SubmissionStates.REJECTED,
@@ -175,7 +182,7 @@ def test_withdraw_fail(submission, state):
 
 
 @pytest.mark.parametrize(
-    'state',
+    "state",
     (
         SubmissionStates.ACCEPTED,
         SubmissionStates.CONFIRMED,
@@ -194,7 +201,7 @@ def test_make_submitted(submission, state):
         assert submission.state == SubmissionStates.SUBMITTED
         assert submission.event.queued_mails.count() == 0
         assert submission.event.wip_schedule.talks.count() == 0
-        assert submission.logged_actions().count() == 0
+        assert submission.logged_actions().count() == 1
 
 
 @pytest.mark.django_db
@@ -206,13 +213,13 @@ def test_submission_set_state_error_msg(submission):
             submission._set_state(SubmissionStates.SUBMITTED)
 
         assert (
-            'must be rejected or accepted or withdrawn not canceled to be submitted'
+            "must be rejected or accepted or withdrawn or draft not canceled to be submitted"
             in str(excinfo.value)
         )
 
 
 @pytest.mark.parametrize(
-    'state,expected',
+    "state,expected",
     ((SubmissionStates.ACCEPTED, False), (SubmissionStates.DELETED, True)),
 )
 @pytest.mark.django_db
@@ -244,37 +251,192 @@ def test_nonstandard_duration(submission):
 
 @pytest.mark.django_db
 def test_submission_image_path(submission):
-    assert submission_image_path(submission, 'foo').startswith(f'{submission.event.slug}/images/{submission.code}')
+    assert submission_image_path(submission, "foo").startswith(
+        f"{submission.event.slug}/submissions/{submission.code}"
+    )
 
 
 @pytest.mark.django_db
 def test_submission_change_slot_count(accepted_submission):
     with scope(event=accepted_submission.event):
-        assert accepted_submission.slots.filter(schedule=accepted_submission.event.wip_schedule).count() == 1
-        accepted_submission.event.settings.present_multiple_times = True
+        assert (
+            accepted_submission.slots.filter(
+                schedule=accepted_submission.event.wip_schedule
+            ).count()
+            == 1
+        )
+        accepted_submission.event.feature_flags["present_multiple_times"] = True
+        accepted_submission.event.save()
         accepted_submission.slot_count = 2
         accepted_submission.save()
         accepted_submission.accept()
-        assert accepted_submission.slots.filter(schedule=accepted_submission.event.wip_schedule).count() == 2
+        assert (
+            accepted_submission.slots.filter(
+                schedule=accepted_submission.event.wip_schedule
+            ).count()
+            == 2
+        )
         accepted_submission.slot_count = 1
         accepted_submission.save()
         accepted_submission.accept()
-        assert accepted_submission.slots.filter(schedule=accepted_submission.event.wip_schedule).count() == 1
+        assert (
+            accepted_submission.slots.filter(
+                schedule=accepted_submission.event.wip_schedule
+            ).count()
+            == 1
+        )
 
 
 @pytest.mark.django_db
 def test_submission_assign_code(submission, monkeypatch):
+    from pretalx.common.mixins import models as models_mixins
     from pretalx.submission.models import submission as pretalx_submission
+
     called = -1
-    submission_codes = [submission.code, submission.code, 'abcdef']
+    submission_codes = [submission.code, submission.code, "abcdef"]
 
     def yield_random_codes(*args, **kwargs):
         nonlocal called
         called += 1
         return submission_codes[called]
-    monkeypatch.setattr(pretalx_submission, 'get_random_string', yield_random_codes)
+
+    monkeypatch.setattr(models_mixins, "get_random_string", yield_random_codes)
     new_submission = pretalx_submission.Submission()
     assert not new_submission.code
     new_submission.assign_code()
-    assert new_submission.code == 'abcdef'
+    assert new_submission.code == "abcdef"
     assert new_submission.code != submission.code
+
+
+@pytest.mark.parametrize(
+    "data,loaded",
+    (
+        ("", {}),
+        (None, {}),
+        ("{}", {}),
+        ("[]", {}),
+        ("[1,2,3]", {}),
+        ('{"a": "b"}', {"a": "b"}),
+        ("1saser;", {}),
+    ),
+)
+def test_submission_anonymise(data, loaded):
+    s = Submission()
+    s.anonymised_data = data
+    assert s.anonymised == loaded
+    assert not s.is_anonymised
+
+
+@pytest.mark.parametrize(
+    "state,expected",
+    (
+        (SubmissionStates.SUBMITTED, 0),
+        (SubmissionStates.ACCEPTED, 1),
+        (SubmissionStates.REJECTED, 1),
+        (SubmissionStates.CONFIRMED, 0),
+        (SubmissionStates.CANCELED, 0),
+    ),
+)
+@pytest.mark.django_db
+def test_send_state_mail(submission, state, expected):
+    with scope(event=submission.event):
+        submission.state = state
+        submission.save()
+        count = submission.event.queued_mails.all().count()
+        submission.send_state_mail()
+        assert submission.event.queued_mails.all().count() == count + expected
+
+
+@pytest.mark.django_db
+def test_public_slots_without_schedule(submission):
+    with scope(event=submission.event):
+        submission.event.schedules.all().delete()
+        submission.event.is_public = True
+        submission.event.feature_flags["show_schedule"] = True
+        submission.event.save()
+        assert submission.public_slots == []
+
+
+@pytest.mark.django_db
+def test_public_slots_with_visible_agenda(submission, slot):
+    with scope(event=submission.event):
+        submission.event.is_public = True
+        submission.event.feature_flags["show_schedule"] = True
+        submission.event.save()
+        assert len(submission.public_slots) == 0
+
+
+@pytest.mark.django_db
+def test_content_for_mail(submission, file_question, boolean_question):
+    f = SimpleUploadedFile("testresource.txt", b"a resource")
+    with scope(event=submission.event):
+        Answer.objects.create(
+            question=boolean_question, answer=True, submission=submission
+        )
+        fa = Answer.objects.create(
+            question=file_question, answer_file=f, submission=submission
+        )
+        host = submission.event.custom_domain or settings.SITE_URL
+
+        assert (
+            submission.get_content_for_mail().strip()
+            == f"""**Proposal title**: {submission.title}
+
+**Abstract**: {submission.abstract}
+
+**Description**: {submission.description}
+
+**Notes**: {submission.notes}
+
+**Language**: {submission.content_locale}
+
+**{boolean_question.question}**: Yes
+
+**{file_question.question}**: {host}{fa.answer_file.url}""".strip()
+        )
+
+
+@pytest.mark.django_db
+def test_send_invite_requires_signature(submission):
+    with scope(event=submission.event):
+        with pytest.raises(Exception):  # noqa
+            submission.send_invite(None)
+
+
+@pytest.mark.parametrize(
+    "state",
+    (
+        SubmissionStates.SUBMITTED,
+        SubmissionStates.ACCEPTED,
+        SubmissionStates.REJECTED,
+        SubmissionStates.CONFIRMED,
+        SubmissionStates.CANCELED,
+    ),
+)
+@pytest.mark.parametrize(
+    "pending_state",
+    (
+        SubmissionStates.SUBMITTED,
+        SubmissionStates.ACCEPTED,
+        SubmissionStates.REJECTED,
+        SubmissionStates.CONFIRMED,
+        SubmissionStates.CANCELED,
+    ),
+)
+@pytest.mark.django_db
+def test_pending_state(submission, state, pending_state):
+    with scope(event=submission.event):
+        submission.state = state
+        submission.pending_state = pending_state
+        submission.save()
+        count = submission.logged_actions().count()
+
+        submission.apply_pending_state(force=True)
+
+        assert submission.state == pending_state
+        assert submission.logged_actions().count() == (
+            count + int(state != pending_state)
+        )
+        if pending_state == "accepted" and state == "submitted":
+            assert submission.event.queued_mails.count() == 1
+            assert submission.event.wip_schedule.talks.count() == 1

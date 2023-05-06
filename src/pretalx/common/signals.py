@@ -27,7 +27,7 @@ class EventPluginSignal(django.dispatch.Signal):
     def _is_active(sender, receiver):
         # Find the Django application this belongs to
         searchpath = receiver.__module__
-        core_module = any([searchpath.startswith(cm) for cm in settings.CORE_MODULES])
+        core_module = any(searchpath.startswith(cm) for cm in settings.CORE_MODULES)
         # Only fire receivers from active plugins and core modules
         if core_module:
             return True
@@ -38,7 +38,7 @@ class EventPluginSignal(django.dispatch.Signal):
             app = None
             while True:
                 app = app_cache.get(searchpath)
-                if "." not in searchpath or app:
+                if "." not in searchpath or app:  # pragma: no cover
                     break
                 searchpath, _ = searchpath.rsplit(".", 1)
             return app and app.name in sender.plugin_list
@@ -91,7 +91,7 @@ class EventPluginSignal(django.dispatch.Signal):
         ):
             return []
 
-        if not app_cache:
+        if not app_cache:  # pragma: no cover
             _populate_app_cache()
 
         for receiver in self._live_receivers(sender):
@@ -107,7 +107,9 @@ class EventPluginSignal(django.dispatch.Signal):
             key=lambda response: (response[0].__module__, response[0].__name__),
         )
 
-    def send_chained(self, sender: Event, chain_kwarg_name, **named) -> List[Tuple[Callable, Any]]:
+    def send_chained(
+        self, sender: Event, chain_kwarg_name, **named
+    ) -> List[Tuple[Callable, Any]]:
         """Send signal from sender to all connected receivers. The return value
         of the first receiver will be used as the keyword argument specified by
         ``chain_kwarg_name`` in the input to the second receiver and so on. The
@@ -123,10 +125,10 @@ class EventPluginSignal(django.dispatch.Signal):
         if (
             not self.receivers
             or self.sender_receivers_cache.get(sender) is NO_RECEIVERS
-        ):
+        ):  # pragma: no cover
             return response
 
-        if not app_cache:
+        if not app_cache:  # pragma: no cover
             _populate_app_cache()
 
         for receiver in self._live_receivers(sender):
@@ -145,10 +147,32 @@ idempotent, meaning it should not make a difference if this is sent out more oft
 than expected.
 """
 
-register_data_exporters = EventPluginSignal(providing_args=[])
+register_data_exporters = EventPluginSignal()
 """
 This signal is sent out to get all known data exporters. Receivers should return a
 subclass of pretalx.common.exporter.BaseExporter
 
 As with all event plugin signals, the ``sender`` keyword argument will contain the event.
+"""
+activitylog_display = EventPluginSignal()
+"""
+To display an instance of the ``ActivityLog`` model to a human user,
+``pretalx.common.signals.activitylog_display`` will be sent out with a ``activitylog``
+argument.
+
+The first received response that is not ``None`` will be used to display the log entry
+to the user. The receivers are expected to return plain (lazy) text.
+
+As with all event plugin signals, the ``sender`` keyword argument will contain the event.
+"""
+register_locales = django.dispatch.Signal()
+"""
+To provide additional languages via plugins, you will have to provide some settings in
+the pretalx settings file, and return a list of the registered locales as response
+to this plugin signal.
+
+You should always return your locale when no ``sender`` keyword argument is given to
+make your locale available to the makemessages command. Otherwise, check that your
+plugin is enabled in the current event context if your locale should be scoped to
+events with your plugin activated.
 """

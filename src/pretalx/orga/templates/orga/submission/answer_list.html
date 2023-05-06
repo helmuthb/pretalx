@@ -12,9 +12,9 @@
                 <i class="fa fa-file-o"></i> <a href="{{ answer.answer_file.url }}">{{ answer.answer_file }}</a>
             {% endif %}
         {% else %}
-            {{ quotation_open }}{{ answer.answer }}{{ quotation_close }}
+            {{ quotation_open }}{% include "common/question_answer.html" with answer=answer %}{{ quotation_close }}
         {% endif %}
     {% empty %}
-        {% trans "No questions have been answered at the moment." %}
+        {% translate "No questions have been answered at the moment." %}
     {% endfor %}
 {% endblock %}

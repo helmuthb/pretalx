@@ -23,7 +23,7 @@ def test_documentation_includes_config_options():
     with (doc_dir / "administrator/configure.rst").open() as doc_file:
         doc_text = doc_file.read()
     config = configparser.RawConfigParser()
-    config = config.read(here / "../../pretalx.cfg")
+    config = config.read(here / "../../pretalx.example.cfg")
 
     for category in config:
         for key in category:
@@ -44,8 +44,8 @@ def test_documentation_includes_signals(app):
 def test_documentation_includes_management_commands(app):
     with suppress(ImportError):
         importlib.import_module(app + ".management.commands")
-        path = base_dir / app.partition('.')[-1] / 'management/commands'
-        for python_file in path.glob('*.py'):
+        path = base_dir / app.partition(".")[-1] / "management/commands"
+        for python_file in path.glob("*.py"):
             file_name = python_file.name
-            if file_name not in ['__init__.py', 'makemigrations.py']:
-                assert f'python -m pretalx {file_name[:-3]}``' in command_docs
+            if file_name not in ["__init__.py", "makemigrations.py"]:
+                assert f"python -m pretalx {file_name[:-3]}``" in command_docs

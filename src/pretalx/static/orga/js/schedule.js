@@ -28,15 +28,26 @@ var api = {
         return Promise.reject(error)
       })
   },
-  fetchTalks() {
+  fetchTalks(options) {
+    options = options || {}
     var url = [
       window.location.protocol,
       "//",
       window.location.host,
       window.location.pathname,
       "api/talks/",
-      window.location.search,
     ].join("")
+    if (window.location.search) {
+      url += window.location.search + "&"
+    } else {
+      url += "?"
+    }
+    if (options.since) {
+      url += `since=${encodeURIComponent(options.since)}&`
+    }
+    if (options.warnings) {
+      url += 'warnings=true'
+    }
     return api.http("GET", url, null)
   },
   fetchRooms(eventSlug) {
@@ -79,26 +90,40 @@ var api = {
       window.location.host,
       window.location.pathname,
       "api/talks/",
-      talk.id,
-      "/",
+      talk.id ? (talk.id + "/") : "",
       window.location.search,
     ].join("")
-    return api.http("PATCH", url, {
-      room: talk.room,
+    const action = talk.action || "PATCH"
+    return api.http(action, url, {
+      room: (talk.room && talk.room.id) ? talk.room.id : talk.room,
       start: talk.start,
+      action: talk.action,
+      duration: talk.duration,
+      description: talk.description,
     })
   },
+  deleteTalk(talk) {
+    return api.saveTalk({id: talk.id, action: "DELETE"})
+  },
+  createTalk(talk) {
+    talk.action = "POST"
+    return api.saveTalk(talk)
+  }
 }
 
 var dragController = {
   draggedTalk: null,
+  modalTalk: null,
+
   event: null,
   roomColumn: null,
   dragPosX: null,
   dragPosY: null,
+  startY: null,
   dragSource: null,
+  isCreating: false,
 
-  startDragging(talk, dragSource, dragPosX, dragPosY) {
+  startDraggingTalk(talk, dragSource, dragPosX, dragPosY) {
     this.draggedTalk = JSON.parse(JSON.stringify(talk))
     this.dragPosX = dragPosX
     this.dragSource = dragSource
@@ -108,11 +133,25 @@ var dragController = {
   stopDragging() {
     if (this.roomColumn) {
       this.roomColumn.classList.remove("hover-active")
-      this.dragSource.classList.remove("drag-source")
-      this.draggedTalk = null
-      this.event = null
     }
+    this.dragSource.classList.remove("drag-source")
+    this.draggedTalk = null
+    this.event = null
+    this.startY = null
   },
+  startModal(talk) {
+    this.modalTalk = talk
+    this.draggedTalk = null
+    this.stopDragging()
+  },
+  switchToModal() {
+    this.modalTalk = this.draggedTalk
+    this.draggedTalk = null
+    this.stopDragging()
+  },
+  closeModal() {
+    this.modalTalk = null;
+  }
 }
 
 function generateTimesteps(start, interval, intervalunit, end) {
@@ -157,14 +196,86 @@ Vue.component("availability", {
   },
 })
 
+Vue.component("modal", {
+  template: `
+    <div id="schedule-modal" class="schedule-modal">
+      <h2 v-if="talk.id">Edit break</h2>
+      <h2 v-else>New break</h2>
+      <form class="form-control">
+        <div class="form-group row">
+          <label class="col-md-3 col-form-label">Description</label>
+          <div class="col-md-9"><div class="i18n-form-group">
+            <input type="text" class="form-control" :title="locale" :lang="locale" v-model="talk.description[locale]" v-for="locale in locales" v-on:keyup.enter="saveTalk">
+          </div></div>
+        </div>
+        <div class="form-group row">
+          <label class="col-md-3 col-form-label">Duration</label>
+          <div class="col-md-9"><div class="input-group">
+            <input type="number" name="duration" value="30" min="5" class="form-control" placeholder="Duration" title="Duration in minutes" v-model="talk.duration" v-on:keyup.enter="saveTalk">
+            <div class="input-group-append"><span class="input-group-append input-group-text">minutes</span></div>
+          </div>
+        </div></div>
+        <div class="button-row">
+          <div class="btn btn-outline-danger" @click="deleteTalk" v-if="talk.id">Delete</div>
+          <div v-else></div>
+          <div class="btn btn-success" @click="saveTalk">Save</div>
+        </div>
+      </form>
+    </div>
+  `,
+  props: {
+    talk: Object,
+    locales: Array,
+  },
+  created () {
+    if (!this.talk.description) {
+      this.talk.description = {"en": ""}
+    }
+    if (!this.talk.duration && this.talk.start) {
+      this.talk.duration = moment(this.talk.end).diff(this.talk.start, "minutes")
+    }
+  },
+  methods: {
+    deleteTalk () {
+      api.deleteTalk(this.talk).then((resp) => {
+        this.$emit("deleteTalk", this.talk)
+        dragController.closeModal()
+      })
+    },
+    saveTalk () {
+      if (this.talk.id) {
+        this.talk.end = moment(this.talk.start).add(this.talk.duration, "minutes")
+        api.saveTalk(this.talk).then(resp => {
+          dragController.closeModal()
+          this.talk.duration = resp.duration
+          this.talk.start = resp.start
+          this.talk.end = resp.end
+          this.$emit("saveTalk", this.talk)
+        })
+      } else {
+        if (this.talk.duration) {
+          api.createTalk(this.talk).then(resp => {
+            dragController.closeModal()
+            this.$emit("newTalk", resp)
+          })
+        }
+      }
+    },
+  }
+})
+
 Vue.component("talk", {
   template: `
-    <div class="talk-box" :class="[talk.state, {dragged: isDragged, warning: displayWarnings}]" v-bind:style="style" @mousedown="onMouseDown"
-         :title="title" data-toggle="tooltip">
+    <div class="talk-box" :class="[talk.state, {dragged: isDragged, warning: displayWarnings, break: isBreak}]" v-bind:style="style" @mousedown="onMouseDown"
+         :title="title" :data-original-title="title" data-toggle="tooltip">
       <span v-if="displayWarnings" class="warning-sign"><i class="fa fa-warning"></i></span>
-      <span v-if="!isDragged || !this.talk.start">{{ talk.title }}</span>
-      <span class="time" v-if="this.talk.start && this.isDragged">
+      <span v-if="(!isDragged || !this.talk.start) && talk.title">{{ talk.title }}</span>
+      <span v-if="isBreak && !isDragged" class="description">{{ breakDescription }}</span>
+      <span class="time" v-if="this.talk.start && this.isDragged && this.talk.id">
         <span>{{ humanStart }}</span>
+      </span>
+      <span class="time" v-else-if="this.isDragged">
+        <span>{{ talk.duration }} minutes</span>
       </span>
     </div>
   `,
@@ -185,36 +296,20 @@ Vue.component("talk", {
       }
       return title
     },
+    breakDescription () {
+      if (!this.talk.description) return ""
+      if (this.talk.description.en) return this.talk.description.en
+      return this.talk.description.values ? this.talk.description.values[0] : ""
+    },
     style() {
       var style = { height: this.talk.duration + "px" }
       if (this.talk.track && this.talk.track.color) {
         style.borderColor = this.talk.track.color
       }
-      if (this.isDragged) {
-        var rect = this.$parent.$el.getBoundingClientRect()
-
-        var colRect
-        if (dragController.roomColumn) {
-          colRect = dragController.roomColumn.getBoundingClientRect()
-        } else {
-          colRect = app.$refs.unassigned.getBoundingClientRect()
-        }
-        var dragTop =
-          Math.max(
-            colRect.top,
-            dragController.event.clientY - dragController.dragPosY
-          ) - rect.top
-        var dragLeft =
-          dragController.event.clientX - rect.left - dragController.dragPosX
-
-        style.transform = "translate(" + dragLeft + "px," + dragTop + "px)"
-        style.width = colRect.width - 16 + "px"
-      } else if (this.talk.room !== null) {
-        style.transform =
-          "translatey(" +
-          moment(this.talk.start).diff(this.start, "minutes") +
-          "px)"
-      }
+      style.transform =
+        "translateY(" +
+        moment(this.talk.start).diff(this.start, "minutes") +
+        "px)"
       return style
     },
     humanStart() {
@@ -225,12 +320,16 @@ Vue.component("talk", {
         ? this.talk.warnings.map(warning => warning.message).join("\n")
         : null
     },
+    isBreak() {
+      return !this.talk.submission_type
+    },
   },
   methods: {
     onMouseDown(event) {
       if (event.buttons === 1) {
         var talkRect = this.$el.getBoundingClientRect()
-        dragController.startDragging(
+        dragController.isCreating = false
+        dragController.startDraggingTalk(
           this.talk,
           this.$el,
           event.clientX - talkRect.left,
@@ -277,8 +376,11 @@ Vue.component("room", {
   template: `
     <div class="room-column">
       <a v-bind:href="room.url" :title="displayName"><div class="room-header">{{ displayName }}</div></a>
-      <div class="room-container" v-bind:style="style" :data-id="room.id">
+      <div class="room-container" v-bind:style="style" :data-id="room.id" @mousedown="onMouseDown">
       <availability v-for="avail in availabilities" :availability="avail" :start="start" :key="avail.id"></availability>
+      <talk ref="draggedTalk"
+          v-if="dragController.draggedTalk && dragController.event && dragController.draggedTalk.room == this.room.id" :talk="dragController.draggedTalk" :key="dragController.draggedTalk.id" :is-dragged="true" :start="start">
+      </talk>
       <talk v-for="talk in myTalks" :talk="talk" :start="start" :key="talk.id"></talk>
       <timestep v-for="timestep in midnights" :timestep="timestep" :start="start" :thin="true">
       </timestep>
@@ -294,7 +396,7 @@ Vue.component("room", {
   },
   asyncComputed: {
     availabilities() {
-      if (dragController.draggedTalk) {
+      if (dragController.draggedTalk && dragController.draggedTalk.id) {
         return api
           .fetchAvailabilities(dragController.draggedTalk.id, this.room.id)
           .then(result => result.results)
@@ -318,7 +420,22 @@ Vue.component("room", {
         height: this.duration + "px",
       }
     },
+    dragController () { return dragController }
   },
+  methods: {
+    onMouseDown(event) {
+      if (event.buttons === 1 && !dragController.draggedTalk) {
+        var talkRect = this.$el.getBoundingClientRect()
+        dragController.isCreating = true
+        dragController.startDraggingTalk(
+          {start: null, end: null, room: this.room, duration: null, description: null},
+          this.$el,
+          event.clientX - talkRect.left,
+          0
+        )
+      }
+    }
+  }
 })
 
 var app = new Vue({
@@ -326,7 +443,7 @@ var app = new Vue({
   template: `
     <div @mousemove="onMouseMove" @mouseup="onMouseUp">
       <div id="fahrplan" :class="showUnassigned ? 'narrow' : 'wide'">
-        <talk ref="draggedTalk" v-if="dragController.draggedTalk && dragController.event" :talk="dragController.draggedTalk" :key="dragController.draggedTalk.id" :is-dragged="true"></talk>
+        <modal ref="modalTalk" v-if="dragController.modalTalk && dragController.modalTalk.duration" :talk="dragController.modalTalk" v-on:deleteTalk="deleteTalk" v-on:saveTalk="saveTalk" :locales="locales" v-on:newTalk="newTalk"></modal>
         <div id="timeline" v-if="!loading">
           <div class="timeline-container">
             <timestep v-for="timestep in timesteps" :timestep="timestep" :start="start" :thin="false">
@@ -341,7 +458,7 @@ var app = new Vue({
           <div class="alert alert-danger room-column" v-if="rooms && rooms.length < 1">
             Please configure some rooms first.
           </div>
-          <room v-for="room in rooms" :room="room" :talks="talks" :duration="duration" :start="start" :end="end" :key="room.id">
+          <room v-for="room in filteredRooms" :room="room" :talks="talks" :duration="duration" :start="start" :end="end" :key="room.id">
           </room>
         </div>
       </div>
@@ -350,7 +467,7 @@ var app = new Vue({
         <div id='unassigned-talks' v-if="showUnassigned">
           <div class="input-group">
             <div class="input-group-prepend input-group-text"><i class="fa fa-search"></i></div>
-            <input type="text" class="form-control" placeholder="Search..." v-model="search">
+            <input type="text" class="form-control" placeholder="title track:foo type:baz" v-model="search">
           </div>
           <div id="unassigned-container" ref="unassigned">
               <talk v-for="talk in filteredTalks" v-if="!talk.room" :talk="talk" :key="talk.id"></talk>
@@ -365,31 +482,51 @@ var app = new Vue({
       rooms: null,
       start: null,
       end: null,
+      since: null,
       timezone: null,
+      locales: null,
       loading: true,
       showUnassigned: true,
       search: "",
       dragController: dragController,
+      selectedRooms: [],
     }
   },
   created() {
+    $("#id_version").on("change", e => {
+      document.querySelector("#schedule-version").submit()
+    })
+    $("#id_room").on("change", e => {
+      this.updateRooms()
+    })
     api.fetchRooms(this.eventSlug).then(result => {
       this.rooms = result.results
     })
     api
       .fetchTalks()
       .then(result => {
-        this.talks = result.results
+        this.talks = result.results.sort((a, b) => (a.title < b.title) ? -1 : 1)
         this.timezone = result.timezone
         this.start = moment.tz(result.start, this.timezone)
         this.end = moment.tz(result.end, this.timezone)
+        this.locales = result.locales
+        this.since = result.now
       })
+      .then(() => this.updateRooms())
       .then(() => {
         this.loading = false
         $(function() {
           $('[data-toggle="tooltip"]').tooltip()
         })
       })
+      .then(() => {
+        // load warnings later, because they are slow
+        api.fetchTalks({warnings: true}).then(result => {
+          this.talks = result.results.sort((a, b) => (a.title < b.title) ? -1 : 1)
+          this.since = result.now
+        })
+      })
+    window.setTimeout(this.pollUpdates, 10*1000)
   },
   computed: {
     currentDay() {},
@@ -401,8 +538,40 @@ var app = new Vue({
     },
     filteredTalks() {
       if (!this.talks) return []
+      const searchTerms = this.search
+          .split(" ")
+          .filter(d => d.length)
+          .map(d => d.toLowerCase().trim())
+
+      if (!searchTerms.length) return this.talks
+
       return this.talks.filter(talk => {
-        return talk.title.toLowerCase().indexOf(this.search.toLowerCase()) > -1
+        const speakers = talk.speakers || []
+        const title = talk.title.toLowerCase()
+        const submissionType = talk.submission_type ? talk.submission_type.toLowerCase() : ""
+        const track = talk.track ? talk.track.name.toLowerCase() : ""
+        return searchTerms.some(term => {
+          if (track && term.startsWith("track:")) {
+            if (track.includes(term.substring(6))) return true
+          } else if (term.startsWith("type:")) {
+            if (submissionType.includes(term.substring(5))) return true
+          } else {
+            if (title.includes(term) || speakers.some(speaker => speaker.name.toLowerCase().includes(term))) {
+              return true
+            }
+          }
+          return false
+        })
+      })
+    },
+    filteredRooms() {
+      this.updateURL();
+
+      if (!this.rooms) return [];
+      if (this.selectedRooms.length === 0) return this.rooms;
+
+      return this.rooms.filter(room => {
+        return this.selectedRooms.includes(room.id);
       })
     },
     eventSlug() {
@@ -411,6 +580,43 @@ var app = new Vue({
     },
   },
   methods: {
+    deleteTalk (event) {
+      // only removes talk from display
+      const index = this.talks.indexOf(event);
+      this.talks.splice(index, 1);
+    },
+    newTalk(talk) {
+      this.talks.push(talk)
+    },
+    saveTalk(response) {
+      const talk = this.talks.find((talk) => talk.id == response.id)
+      Object.assign(talk, response)
+    },
+    pollUpdates() {
+      if (this.since) {
+        api
+          .fetchTalks({since: this.since, warnings: true})
+          .then(result => {
+            this.since = result.now
+            result.results.forEach((data) => {
+              const talk = this.talks.find((talk) => talk.id == data.id)
+              Object.assign(talk, data)
+            })
+            window.setTimeout(this.pollUpdates, 10*1000)
+          })
+      }
+    },
+    updateURL() {
+      let qp = new URLSearchParams(location.search);
+      qp.delete('room');
+      this.selectedRooms.forEach((r) => { qp.append('room', r) });
+      history.replaceState(null, null, "?" + qp.toString());
+    },
+    updateRooms() {
+      this.selectedRooms = [...document.querySelector("#id_room").options].filter(
+        option => option.selected
+      ).map(option => parseInt(option.value))
+    },
     onMouseMove(event) {
       if (dragController.draggedTalk) {
         dragController.event = event
@@ -435,14 +641,23 @@ var app = new Vue({
           dragController.roomColumn = newRoomColumn
           dragController.draggedTalk.room = newRoomColumn.dataset.id
           dragController.roomColumn.classList.add("hover-active")
-          if (dragController.roomColumn && app.$refs.draggedTalk) {
+          if (dragController.roomColumn) {
             var colRect = dragController.roomColumn.getBoundingClientRect()
-            var dragRect = app.$refs.draggedTalk.$el.getBoundingClientRect()
-            var position = dragRect.top - colRect.top
+            var position = event.clientY - colRect.top - (dragController.dragPosY || 0)
             position -= position % 5
-            dragController.draggedTalk.start = moment(this.start)
+            const cursorTime = moment(this.start)
               .add(position, "minutes")
               .format()
+            if (dragController.isCreating) {
+              if (!dragController.draggedTalk.start) {
+                dragController.draggedTalk.start = cursorTime
+                dragController.startY = dragController.event.clientY
+              }
+              dragController.draggedTalk.end = cursorTime
+              dragController.draggedTalk.duration = moment(cursorTime).diff(moment(dragController.draggedTalk.start), "minutes")
+            } else {
+              dragController.draggedTalk.start = cursorTime
+            }
           }
         } else if (newRoomColumn.id === "unassigned-container") {
           if (newRoomColumn && newRoomColumn !== dragController.roomColumn) {
@@ -483,18 +698,43 @@ var app = new Vue({
       }
     },
     onMouseUp(event) {
-      if (dragController.draggedTalk) {
+      if (dragController.draggedTalk && !dragController.modalTalk) {
         if (dragController.event) {
-          api.saveTalk(dragController.draggedTalk).then(response => {
-            this.talks.forEach((talk, index) => {
-              if (talk.id == response.id) {
-                Object.assign(this.talks[index], response)
-              }
+          // got dragged
+          if (!dragController.draggedTalk.submission_type && !dragController.draggedTalk.room) {
+            api.deleteTalk(dragController.draggedTalk).then(response => {
+              this.deleteTalk(dragController.draggedTalk)
             })
-          })
+          } else {
+            if (!dragController.draggedTalk.id) {
+              dragController.switchToModal()
+            } else {
+              api.saveTalk(dragController.draggedTalk).then(response => { this.saveTalk(response) })
+            }
+          }
         } else {
-          window.open(dragController.draggedTalk.url)
-          dragController.stopDragging()
+          // this is a click
+          const url = dragController.draggedTalk.url
+          if (url) { // this is a talk, so we open a link
+            dragController.stopDragging()
+            window.open(url)
+          } else {
+            dragController.switchToModal()
+          }
+        }
+      } else if (dragController.modalTalk) {
+          let clickElement = document.elementFromPoint(
+            event.clientX,
+            event.clientY
+          )
+          while (
+            clickElement.id !== "schedule-modal" &&
+            clickElement.parentElement
+          ) {
+            clickElement = clickElement.parentElement
+          }
+        if (clickElement.id !== "schedule-modal") {
+          dragController.closeModal();
         }
       }
       dragController.stopDragging()

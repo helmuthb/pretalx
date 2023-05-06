@@ -58,13 +58,13 @@ Pagination
 The API will paginate most lists of objects. The response will take the form
 of:
 
-.. sourcecode:: javascript
+.. sourcecode:: json
 
     {
         "count": 117,
         "next": "https://pretalx.yourdomain.com/api/v1/organisers/?limit=20&offset=40",
         "previous": null,
-        "results": […],
+        "results": []
     }
 
 As you can see, the response contains the total number of results in the field
@@ -113,11 +113,11 @@ representation and how we serialise them to JSON.
 ===================== ============================ ===================================
 Internal type         JSON representation          Examples
 ===================== ============================ ===================================
-Datetime              String in ISO 8601 format    ``"2017-12-27T10:00:00Z"``
+datetime              String in ISO 8601 format    ``"2017-12-27T10:00:00Z"``
                       with time zone (often UTC)   ``"2017-12-27T10:00:00.596934Z"``,
                                                    ``"2017-12-27T10:00:00+02:00"``
-Date                  String in ISO 8601 format    ``2017-12-27``
-Multi-lingual string  Object of strings            ``{"en": "red", "de": "rot"}``
+date                  String in ISO 8601 format    ``2017-12-27``
+multi-lingual string  Object of strings            ``{"en": "red", "de": "rot"}``
 ===================== ============================ ===================================
 
 Query parameters

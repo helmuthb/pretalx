@@ -3,38 +3,56 @@ from django.utils.translation import gettext_lazy as _
 from django_scopes import ScopedManager
 from i18nfield.fields import I18nCharField, I18nTextField
 
-from pretalx.common.mixins import LogMixin
+from pretalx.common.mixins.models import FileCleanupMixin, LogMixin
 from pretalx.common.phrases import phrases
 from pretalx.common.urls import EventUrls
+from pretalx.common.utils import path_with_hash
 
 
-class SpeakerInformation(LogMixin, models.Model):
+def resource_path(instance, filename):
+    return f"{instance.event.slug}/speaker_information/{path_with_hash(filename)}"
+
+
+class SpeakerInformation(LogMixin, FileCleanupMixin, models.Model):
     """Represents any information organisers want to show all or some
     submitters or speakers."""
+
     event = models.ForeignKey(
-        to='event.Event', related_name='information', on_delete=models.CASCADE
+        to="event.Event", related_name="information", on_delete=models.CASCADE
     )
-    include_submitters = models.BooleanField(
-        verbose_name=_('Include all submitters'),
-        help_text=_('Show to every submitter regardless of their submissions\' status'),
-        default=False,
+    target_group = models.CharField(
+        choices=(
+            ("submitters", _("All submitters")),
+            ("accepted", _("All accepted speakers")),
+            ("confirmed", _("Only confirmed speakers")),
+        ),
+        default="accepted",
+        max_length=11,
     )
-    exclude_unconfirmed = models.BooleanField(
-        verbose_name=_('Exclude unconfirmed speakers'),
-        help_text=_('Show to speakers only once they have confirmed attendance'),
-        default=False,
+    limit_tracks = models.ManyToManyField(
+        to="submission.Track",
+        verbose_name=_("Limit to tracks"),
+        blank=True,
+        help_text=_("Leave empty to show this information to all tracks."),
     )
-    title = I18nCharField(verbose_name=_('Subject'), max_length=200)
-    text = I18nTextField(verbose_name=_('Text'), help_text=phrases.base.use_markdown)
+    limit_types = models.ManyToManyField(
+        to="submission.SubmissionType",
+        verbose_name=_("Limit to proposal types"),
+        blank=True,
+        help_text=_("Leave empty to show this information for all proposal types."),
+    )
+    title = I18nCharField(verbose_name=_("Subject"), max_length=200)
+    text = I18nTextField(verbose_name=_("Text"), help_text=phrases.base.use_markdown)
     resource = models.FileField(
-        verbose_name=_('file'),
+        verbose_name=_("file"),
         null=True,
         blank=True,
-        help_text=_('Please try to keep your upload small, preferably below 16 MB.'),
+        help_text=_("Please try to keep your upload small, preferably below 16 MB."),
+        upload_to=resource_path,
     )
 
-    objects = ScopedManager(event='event')
+    objects = ScopedManager(event="event")
 
     class orga_urls(EventUrls):
-        base = edit = '{self.event.orga_urls.information}{self.pk}/'
-        delete = '{base}delete'
+        base = edit = "{self.event.orga_urls.information}{self.pk}/"
+        delete = "{base}delete"

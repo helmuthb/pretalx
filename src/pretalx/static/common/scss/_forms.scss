@@ -4,14 +4,10 @@
 
 .form-group {
   display: flex;
-
-  input {
-    line-height: normal;
-  }
 }
 
-.form-control {
-  font-size: 14px;
+.form-control:focus {
+  box-shadow: 0 0 0 1px rgba(58, 165, 124, 0.25);
 }
 
 input[type="number"]::-webkit-outer-spin-button,
@@ -40,7 +36,7 @@ form label.col-form-label {
 }
 
 form small.form-text.text-muted {
-  color: $gray !important;
+  color: $body-color-light;
   font-size: inherit;
   a {
     text-decoration: underline;
@@ -57,19 +53,18 @@ form .form-control:disabled,
 }
 
 #auth-form {
-  display: flex;
-  flex-direction: row;
-
   .auth-form-block {
-    flex-grow: 1;
     margin: 12px;
   }
 }
 
 .labelless-password-input-form {
-  flex-direction: column;
   margin-left: auto;
   margin-right: auto;
+
+  .form-group {
+    flex-direction: column;
+  }
 
   input.password_strength,
   input.password_confirmation {
@@ -77,6 +72,17 @@ form .form-control:disabled,
     display: block;
     width: 100%;
     flex-grow: 1;
+  }
+}
+input.password_strength {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  &:focus {
+    border-bottom: 0;
+    + .password-progress .password-progress-bar {
+      border: #89d6b8 2px solid;
+      border-top: 0;
+    }
   }
 }
 
@@ -94,6 +100,7 @@ form .form-control:disabled,
     padding-top: 2px;
     padding: 0;
     margin-bottom: 0;
+    color: $body-color-light;
   }
 
   .password-progress {
@@ -102,6 +109,10 @@ form .form-control:disabled,
     .password-progress-bar {
       height: 4px;
       margin-bottom: 0 !important;
+      border-bottom-left-radius: 4px;
+      border-bottom-right-radius: 4px;
+      border-top-left-radius: 0px;
+      border-top-right-radius: 0px;
     }
   }
 }
@@ -129,41 +140,16 @@ form .form-control:disabled,
 }
 
 table .form-radio,
-table .form-check {
-  margin-top: -8px;
-}
-
-.checkbox-multi-select {
-  height: calc(2.25rem - 2px);
-  margin-top: 0px !important;
-  width: 300px;
-
-  .multi-select-title {
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    overflow: hidden;
-  }
-
-  .multi-select-options {
-    display: none;
-    position: absolute;
-    margin-top: calc(2.25rem - 2px);
-    background-color: $white;
-    border: 1px solid #ced4da;
-    color: #495057;
-    width: 300px;
-    z-index: 100;
-  }
-  &:hover {
-    .multi-select-options {
-      display: inherit;
-    }
+table .form-check,
+table .radio .form-check {
+  line-height: 1.4;
+  margin-top: 2px;
+  label:before, label:after {
+    margin-left: -35px;
   }
 }
 
-.form-check,
-.checkbox,
-.radio {
+.form-check {
   position: relative;
   padding: 4px 0 4px 36px;
 
@@ -183,8 +169,9 @@ table .form-check {
       width: 24px;
       height: 24px;
       background: $offwhite;
-      box-shadow: 0 0 1px $gray-500;
+      box-shadow: 0 0 2px $gray-500;
       margin-left: -34px;
+      border-radius: 4px;
     }
 
     &:after {
@@ -196,6 +183,7 @@ table .form-check {
       opacity: 0;
       background: $brand-success;
       margin-left: -34px;
+      border-radius: 2px;
     }
   }
 
@@ -212,6 +200,9 @@ table .form-check {
         opacity: 1;
       }
     }
+    &:focus + label:before {
+      box-shadow: 0 0 0 2px rgba(58, 165, 124, 0.4);
+    }
   }
 }
 
@@ -223,6 +214,14 @@ table .form-check {
     }
   }
 }
+.inline-group {
+  .radio, .form-check, .checkbox {
+    display: flex;
+    padding: 0 16px;
+    margin-right: 18px;
+  }
+}
+
 
 table .form-check label,
 table .checkbox label,
@@ -262,9 +261,8 @@ table .action-column {
   }
 }
 /* fix input group prepend look */
-.input-group-text.input-group-prepend {
+.input-group-text.input-group-prepend, .input-group-text.input-group-append {
   font-size: inherit;
-  line-height: inherit;
 }
 
 .markdown-wrapper {
@@ -272,6 +270,8 @@ table .action-column {
   textarea {
     max-height: 160px;
     border-top: none;
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
   }
   .preview {
     border: 1px solid #ced4da;
@@ -297,5 +297,14 @@ table .action-column {
   }
   textarea {
     border: 1px solid #ced4da;
+  }
+}
+@include media-breakpoint-down(md) {
+  .submit-group {
+    flex-direction: column;
+    button, .btn {
+      width: 100%;
+      margin-bottom: 8px;
+    }
   }
 }

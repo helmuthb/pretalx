@@ -9,9 +9,17 @@ from datetime import date
 
 sys.path.insert(0, os.path.abspath('../src'))
 
-import django
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "pretalx.settings")
+import django
 django.setup()
+
+# PyEnchant is required for spellchecking only, and somewhat bothersome
+# to install on some systems.
+try:
+    import enchant
+    HAS_PYENCHANT = True
+except:
+    HAS_PYENCHANT = False
 
 # -- General configuration ------------------------------------------------
 
@@ -25,10 +33,13 @@ extensions = [
     'sphinx.ext.todo',
     'sphinx.ext.viewcode',
     'sphinx_autodoc_typehints',
+    'sphinx_copybutton',
     'sphinxcontrib.httpdomain',
     'sphinxcontrib_django',
     'releases',
 ]
+if HAS_PYENCHANT:
+    extensions.append('sphinxcontrib.spelling')
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -109,7 +120,8 @@ intersphinx_mapping = {'https://docs.python.org/': None}
 linkcheck_ignore = [
     'https://pretalx.yourdomain.com',
     'http://localhost',
-    'https://github.com/pretalx/pretalx/issues/\d+',  # The release notes are auto generated and contain a LOT of issue links
+    'http://127.0.0.1',
+    r'https://github.com/pretalx/pretalx/issues/\d+',  # The release notes are auto generated and contain a LOT of issue links
 ]
 
 # Configure releases
@@ -122,9 +134,20 @@ html_context = {
     "display_github": True, # Integrate GitHub
     "github_user": "pretalx", # Username
     "github_repo": "pretalx", # Repo name
-    "github_version": "master", # Version
+    "github_version": "main", # Version
     "conf_py_path": "/doc/", # Path in the checkout to the docs root
 }
 
 # Autodoc options
 autodoc_member_order = 'groupwise'
+
+# Spelling options
+if HAS_PYENCHANT:
+    spelling_lang = 'en_GB'
+    spelling_word_list_filename='spelling_wordlist.txt'
+    spelling_show_suggestions=True
+
+# Copybutton options
+copybutton_prompt_text = r">>> |\.\.\. |\$ |In \[\d*\]: | {2,5}\.\.\.: | {5,8}: |# |\(env\)\$ "
+copybutton_prompt_is_regexp = True
+copybutton_line_continuation_character = "\\"

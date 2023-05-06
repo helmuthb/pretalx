@@ -17,27 +17,29 @@ class ResetForm(forms.Form):
     def clean(self):
         data = super().clean()
         try:
-            user = User.objects.get(email__iexact=data.get('login_email'))
+            user = User.objects.get(email__iexact=data.get("login_email"))
         except User.DoesNotExist:
             user = None
 
-        data['user'] = user
+        data["user"] = user
         return data
 
 
 class RecoverForm(forms.Form):
     password = PasswordField(
-        label=_('New password'),
+        label=_("New password"),
         required=False,
     )
     password_repeat = PasswordConfirmationField(
         label=phrases.base.password_repeat,
         required=False,
-        confirm_with='password',
+        confirm_with="password",
     )
 
     def clean(self):
         data = super().clean()
-        if data.get('password') != data.get('password_repeat'):
-            self.add_error('password_repeat', ValidationError(phrases.base.passwords_differ))
+        if data.get("password") != data.get("password_repeat"):
+            self.add_error(
+                "password_repeat", ValidationError(phrases.base.passwords_differ)
+            )
         return data

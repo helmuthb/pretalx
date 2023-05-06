@@ -7,6 +7,9 @@ installation guide, you can run the following as your pretalx user::
 
   python -m pretalx <command> [<flags>] [<options>]
 
+You can add the ``--no-pretalx-information`` flag to any of these commands
+to suppress the printing of the pretalx debug startup header.
+
 Database commands
 -----------------
 
@@ -92,7 +95,7 @@ command after every upgrade.
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The ``regenerate_css`` command regenerates only the custom CSS for events. It
-only runs for events with a specified custom color, or custom uploaded styles.
+only runs for events with a specified custom colour, or custom uploaded styles.
 You can specify an event slug with ``--event``. If no event is specified, the
 files for all relevant events will be rebuilt.
 
@@ -134,3 +137,43 @@ with the specified slug in the database, it will create a new event and a new
 organiser.
 
 For existing events, pretalx will release a new schedule version instead.
+
+``python -m pretalx create_test_event``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This command will create a test event for you, with a set of test submissions,
+and speakers, and the like. You will need to install the ``freezegun`` and
+``Faker`` libraries.
+
+With the ``--stage`` flag, you can determine which stage the event in question
+should be in. The available choices are ``cfp`` (CfP still open, plenty of
+submissions, but no reviews), ``review`` (submissions have been reviewed and
+accepted/rejected), ``schedule`` (there is a schedule and the event is
+currently running), and ``over``. ``schedule`` is the default value.
+
+The ``--slug`` flag allows you to specify the slug of the event to be created.
+It defaults to ``democon``. Please only use alphanumerical characters and ``-``
+in the slug, otherwise you won't be able to see the event in the web interface.
+
+``python -m pretalx move_event``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This command will move a given event (with the ``--event <event_slug>``
+parameter) event. By default, the event start date will be set to the current
+day, but youc can configure any date using the ``--date 2021-12-26`` argument.
+
+Data moved includes event start and end dates and the dates of all talks, both
+current and historical. No new schedule versions will need to be created.
+
+This command is intended to be used with demo or test events. If you move an
+actual event like this, be prepared for some odd behaviour and please release a
+new schedule version to make sure external tools can process the changes.
+
+Development commands
+--------------------
+
+``python -m pretalx makemessages``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This command regenerates translation files. It should only be used during
+pretalx development.

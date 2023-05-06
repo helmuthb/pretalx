@@ -1,9 +1,11 @@
+from io import StringIO
 from typing import Tuple
 from urllib.parse import quote
-from xml.etree import ElementTree
+from xml.etree import ElementTree as ET
 
 import qrcode
 import qrcode.image.svg
+from defusedcsv import csv
 from django.utils.functional import cached_property
 from django.utils.safestring import mark_safe
 
@@ -49,6 +51,12 @@ class BaseExporter:
         raise NotImplementedError()  # NOQA
 
     @property
+    def cors(self) -> str:
+        """If you want to let this exporter be accessed with JavaScript, set
+        cors = '*' for all accessing domains, or supply a specific domain."""
+        return None
+
+    @property
     def show_qrcode(self) -> bool:
         """Return True if the link to the exporter should be shown as QR code,
         False (default) otherwise.
@@ -63,18 +71,42 @@ class BaseExporter:
         exporter in displays."""
         raise NotImplementedError()  # NOQA
 
+    @property
+    def group(self) -> str:
+        """Return either 'speaker' or 'submission' to indicate on which
+        organiser export page to list this export.
+
+        Invalid values default to 'submission', which is also where all
+        schedule exports live.
+        """
+        return "submission"
+
     def render(self, **kwargs) -> Tuple[str, str, str]:
         """Render the exported file and return a tuple consisting of a file
         name, a file type and file content."""
         raise NotImplementedError()  # NOQA
 
     class urls(EventUrls):
-        """The urls.base attribute contains the relative URL where this
-        exporter's data will be found, e.g. /event/schedule/export/myexport.ext
-        Use ``exporter.urls.base.full()`` for the complete URL, taking into
-        account the configured event URL, or HTML export URL."""
-        base = '{self.event.urls.export}{self.quoted_identifier}'
+        """The base attribute of this class contains the relative URL where
+        this exporter's data will be found, e.g. /event/schedule/export/my-
+        export.ext Use ``exporter.urls.base.full()`` for the complete URL,
+        taking into account the configured event URL, or HTML export URL."""
+
+        base = "{self.event.urls.export}{self.quoted_identifier}"
 
     def get_qrcode(self):
-        image = qrcode.make(self.urls.base.full(), image_factory=qrcode.image.svg.SvgImage)
-        return mark_safe(ElementTree.tostring(image.get_image()).decode())
+        image = qrcode.make(
+            self.urls.base.full(), image_factory=qrcode.image.svg.SvgImage
+        )
+        return mark_safe(ET.tostring(image.get_image()).decode())
+
+
+class CSVExporterMixin:
+    def render(self, **kwargs):
+        fieldnames, data = self.get_data()
+        output = StringIO()
+        writer = csv.DictWriter(output, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(data)
+        content = output.getvalue()
+        return self.filename, "text/plain", content

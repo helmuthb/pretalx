@@ -20,10 +20,14 @@ document.addEventListener("DOMContentLoaded", function() {
           },
         },
       })
+      .on("colorpickerCreate", function (e) {
+        $(".colorpickerfield").focus(function(ev) { e.colorpicker.show() })
+      })
       .on("colorpickerChange", function(e) {
         var rgb = $(this)
           .colorpicker("color")
           ._color.rgb()
+        $(".colorpicker-update").attr("style", "--color: " + rgb.hex())
         var c = contrast([255, 255, 255], [rgb.red(), rgb.green(), rgb.blue()])
         var mark = "times"
         if (

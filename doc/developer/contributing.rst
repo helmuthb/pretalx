@@ -1,3 +1,5 @@
+.. _contributing:
+
 Contributing to pretalx
 =======================
 
@@ -48,14 +50,15 @@ so we'd like to ask you to follow these style guide notes:
 Code
 ~~~~
 
-Generally, pretalx Python code follows `PEP8`_. We run ``pylama``, ``isort``,
-and ``docformatter`` as style checkers, so those should help you if you're not
-sure how to format something. They are configured via the ``setup.cfg`` file in
-the ``src`` directory, and can be run like this::
+Generally, pretalx Python code follows `PEP8`_. We run ``flake8``, ``isort``
+and ``black`` as style checkers, so those should help you if you're not sure
+how to format something. They are configured via the ``setup.cfg`` file in the
+``src`` directory, and can be run like this::
 
-    isort -rc .
-    docformatter --in-place -r .
-    pylama .
+    isort .
+    black .
+    flake8 .
+    find -name "*.html" | xargs djhtml -i
 
 While we enforce no strict line length, please try to keep your lines **below
 120 characters**. Other than that, we generally subscribe to the `Django
@@ -67,7 +70,7 @@ do the right thing::
 
     prettier --trailing-comma es5 --no-semi --write "path/to/file"
 
-Our tests run with py.test, so please use their ``assert`` statement
+Our tests run with pytest, so please use their ``assert`` statement
 conventions.
 
 Remember to mark all user-facing strings for **translation**.
@@ -137,3 +140,4 @@ you do, please note that these are the meanings we ascribe to them:
 .. _small: https://github.com/pretalx/pretalx/issues?q=is%3Aissue+is%3Aopen+label%3Asize%3Asmall
 .. _PEP8: https://legacy.python.org/dev/peps/pep-0008/
 .. _Django project style guide: https://docs.djangoproject.com/en/dev/internals/contributing/writing-code/coding-style/
+.. _prettier: https://prettier.io/

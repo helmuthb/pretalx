@@ -1,15 +1,15 @@
 from .cfp import CfPForm, QuestionForm, SubmissionTypeForm, TrackForm
-from .event import EventForm, EventSettingsForm
+from .event import EventForm
 from .review import ReviewForm
-from .submission import SubmissionForm
+from .submission import AnonymiseForm, SubmissionForm
 
 __all__ = [
-    'CfPForm',
-    'EventForm',
-    'EventSettingsForm',
-    'QuestionForm',
-    'ReviewForm',
-    'SubmissionForm',
-    'SubmissionTypeForm',
-    'TrackForm',
+    "AnonymiseForm",
+    "CfPForm",
+    "EventForm",
+    "QuestionForm",
+    "ReviewForm",
+    "SubmissionForm",
+    "SubmissionTypeForm",
+    "TrackForm",
 ]

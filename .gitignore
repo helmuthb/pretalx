@@ -48,7 +48,6 @@ coverage.xml
 
 # Translations
 *.mo
-*.pot
 
 # Django stuff:
 *.log
@@ -133,3 +132,7 @@ src/tests/**/*.yml
 # Python packaging
 src/LICENSE
 src/README.rst
+override_settings.py
+
+# Screenshots
+screens/

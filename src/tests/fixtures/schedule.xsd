@@ -3,18 +3,26 @@
   <xs:element name="schedule">
     <xs:complexType>
       <xs:sequence>
+        <xs:element minOccurs="0" name="generator">
+          <xs:complexType>
+            <xs:sequence />
+            <xs:attribute type="xs:string" name="name"/>
+            <xs:attribute type="xs:string" name="version"/>
+          </xs:complexType>
+        </xs:element>
         <xs:element type="xs:string" name="version"/>
         <xs:element name="conference">
           <xs:complexType>
             <xs:all>
               <xs:element type="xs:string"  name="title"/>
-              <xs:element type="xs:string"  name="acronym"/>
+              <xs:element type="acronym"  name="acronym"/>
 
               <xs:element type="xs:date"    name="start" minOccurs="0"/>
               <xs:element type="xs:date"    name="end" minOccurs="0"/>
               <xs:element type="xs:integer" name="days" minOccurs="0"/>
               <xs:element type="duration"   name="timeslot_duration" minOccurs="0"/>
               <xs:element type="httpURI"    name="base_url" minOccurs="0"/>
+              <xs:element type="xs:string"  name="time_zone_name" minOccurs="0" maxOccurs="1"/>
             </xs:all>
           </xs:complexType>
         </xs:element>
@@ -36,6 +44,11 @@
       <xs:selector xpath="day/room/event/slug" />
       <xs:field xpath="." />
     </xs:unique>
+
+    <xs:unique name="day_index_unique">
+      <xs:selector xpath="day" />
+      <xs:field xpath="@index" />
+    </xs:unique>
   </xs:element>
 
   <xs:complexType name="day">
@@ -43,16 +56,17 @@
       <xs:element type="room" name="room" minOccurs="0" maxOccurs="unbounded"/>
     </xs:sequence>
     <xs:attribute type="xs:date" name="date"/>
-    <xs:attribute type="dateTimeTZ" name="start"/>
-    <xs:attribute type="dateTimeTZ" name="end"/>
-    <xs:attribute type="xs:positiveInteger" name="index"/>
+    <xs:attribute type="dateTimeTZ" name="start" use="required"/>
+    <xs:attribute type="dateTimeTZ" name="end" use="required"/>
+    <xs:attribute type="xs:positiveInteger" name="index" use="required"/>
   </xs:complexType>
 
   <xs:complexType name="room">
     <xs:sequence>
       <xs:element type="event" name="event" minOccurs="0" maxOccurs="unbounded"/>
     </xs:sequence>
-    <xs:attribute type="xs:string" name="name"/>
+    <xs:attribute type="xs:string" name="name" use="required"/>
+    <xs:attribute name="guid" type="uuid"/>
   </xs:complexType>
 
   <xs:complexType name="event">
@@ -65,7 +79,7 @@
       <xs:element type="start" name="start"/>
       <xs:element type="duration" name="duration"/>
       <xs:element type="xs:string" name="abstract"/>
-      <xs:element type="xs:string" name="slug"/>
+      <xs:element type="slug" name="slug"/>
       <xs:element type="xs:string" name="track"/>
 
       <xs:element type="xs:string" name="logo" minOccurs="0"/>
@@ -106,9 +120,27 @@
     </xs:restriction>
   </xs:simpleType>
 
+  <xs:simpleType name="acronym">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[a-z0-9_-]{4,}"/>
+    </xs:restriction>
+  </xs:simpleType>
+  
+  <xs:simpleType name="slug">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[a-z0-9_]{4,}-[0-9]{1,6}-[a-z0-9\-_]{4,}"/>
+    </xs:restriction>
+  </xs:simpleType>
+
   <xs:simpleType name="httpURI">
     <xs:restriction base="xs:anyURI">
       <xs:pattern value="https?://.*"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="string-nonempty">
+    <xs:restriction base="xs:string">
+      <xs:pattern value=".+"/>
     </xs:restriction>
   </xs:simpleType>
 
@@ -116,6 +148,8 @@
     <xs:all>
       <xs:element type="xs:string"  name="license"/>
       <xs:element type="xs:boolean" name="optout"/>
+      <xs:element type="httpURI" name="url" minOccurs="0"/>
+      <xs:element type="httpURI" name="link" minOccurs="0"/>
     </xs:all>
   </xs:complexType>
 
@@ -124,7 +158,7 @@
       <xs:element name="person" minOccurs="0" maxOccurs="unbounded">
         <xs:complexType>
           <xs:simpleContent>
-            <xs:extension base="xs:string">
+            <xs:extension base="string-nonempty">
               <xs:attribute type="xs:positiveInteger" name="id"/>
             </xs:extension>
           </xs:simpleContent>

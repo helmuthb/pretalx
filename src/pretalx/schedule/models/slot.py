@@ -1,14 +1,26 @@
-from datetime import datetime, timedelta
+import datetime as dt
+import re
+import string
+import uuid
+from contextlib import suppress
 from urllib.parse import urlparse
 
 import pytz
+import vobject
+from django.conf import settings
 from django.db import models
 from django.utils.functional import cached_property
-from django.utils.translation import gettext_lazy as _
 from django_scopes import ScopedManager
+from i18nfield.fields import I18nCharField
 
-from pretalx.common.mixins import LogMixin
+from pretalx.common.mixins.models import LogMixin
 from pretalx.common.urls import get_base_url
+
+INSTANCE_IDENTIFIER = None
+with suppress(Exception):
+    from pretalx.common.models.settings import GlobalSettings
+
+    INSTANCE_IDENTIFIER = GlobalSettings().get_instance_identifier()
 
 
 class TalkSlot(LogMixin, models.Model):
@@ -20,39 +32,52 @@ class TalkSlot(LogMixin, models.Model):
 
     :param is_visible: This parameter is set on schedule release. Only confirmed talks will be visible.
     """
+
     submission = models.ForeignKey(
-        to='submission.Submission', on_delete=models.PROTECT, related_name='slots'
+        to="submission.Submission",
+        on_delete=models.PROTECT,
+        related_name="slots",
+        null=True,
+        blank=True,  # If the submission is empty, this is a break or similar event
     )
     room = models.ForeignKey(
-        to='schedule.Room',
+        to="schedule.Room",
         on_delete=models.PROTECT,
-        related_name='talks',
+        related_name="talks",
         null=True,
         blank=True,
     )
     schedule = models.ForeignKey(
-        to='schedule.Schedule', on_delete=models.PROTECT, related_name='talks'
+        to="schedule.Schedule", on_delete=models.PROTECT, related_name="talks"
     )
     is_visible = models.BooleanField(default=False)
     start = models.DateTimeField(null=True)
     end = models.DateTimeField(null=True)
+    description = I18nCharField(null=True)
 
-    objects = ScopedManager(event='submission__event')
+    updated = models.DateTimeField(auto_now=True)
+
+    objects = ScopedManager(event="schedule__event")
+
+    class Meta:
+        ordering = ("start",)
 
     def __str__(self):
         """Help when debugging."""
-        return f'TalkSlot(event={self.submission.event.slug}, submission={self.submission.title}, schedule={self.schedule.version})'
+        return f'TalkSlot(event={self.schedule.event.slug}, submission={getattr(self.submission, "title", None)}, schedule={self.schedule.version})'
 
     @cached_property
     def event(self):
-        return self.submission.event
+        return self.submission.event if self.submission else self.schedule.event
 
-    @cached_property
+    @property
     def duration(self) -> int:
         """Returns the actual duration in minutes if the talk is scheduled, and
         the planned duration in minutes otherwise."""
         if self.start and self.end:
             return int((self.end - self.start).total_seconds() / 60)
+        if not self.submission:
+            return None
         return self.submission.get_duration()
 
     @cached_property
@@ -63,97 +88,43 @@ class TalkSlot(LogMixin, models.Model):
 
     @cached_property
     def pentabarf_export_duration(self):
-        duration = timedelta(minutes=self.duration)
+        duration = dt.timedelta(minutes=self.duration)
         days = duration.days
         hours = duration.total_seconds() // 3600 - days * 24
         minutes = duration.seconds // 60 % 60
-        return f'{hours:02}{minutes:02}00'
+        return f"{hours:02}{minutes:02}00"
+
+    @cached_property
+    def local_start(self):
+        if self.start:
+            return self.start.astimezone(self.event.tz)
 
     @cached_property
     def real_end(self):
         """Guaranteed to provide a useful end datetime if ``start`` is set,
         even if ``end`` is empty."""
         return self.end or (
-            self.start + timedelta(minutes=self.duration) if self.start else None
+            self.start + dt.timedelta(minutes=self.duration) if self.start else None
         )
+
+    @cached_property
+    def local_end(self):
+        if self.real_end:
+            return self.real_end.astimezone(self.event.tz)
 
     @cached_property
     def as_availability(self):
         """'Casts' a slot as.
 
         :class:`~pretalx.schedule.models.availability.Availability`, useful for
-        availability arithmetics.
+        availability arithmetic.
         """
         from pretalx.schedule.models import Availability
 
         return Availability(
-            start=self.start, end=self.real_end, event=self.submission.event
+            start=self.start,
+            end=self.real_end,
         )
-
-    @cached_property
-    def warnings(self) -> list:
-        """A list of warnings that apply to this slot.
-
-        Warnings are dictionaries with a ``type`` (``room`` or
-        ``speaker``, for now) and a ``message`` fit for public display.
-        This property only shows availability based warnings.
-        """
-        if not self.start:
-            return []
-        warnings = []
-        availability = self.as_availability
-        if self.room:
-            if not any(
-                room_availability.contains(availability)
-                for room_availability in self.room.availabilities.all()
-            ):
-                warnings.append(
-                    {
-                        'type': 'room',
-                        'message': _(
-                            'The room is not available at the scheduled time.'
-                        ),
-                    }
-                )
-        for speaker in self.submission.speakers.all():
-            profile = speaker.event_profile(event=self.submission.event)
-            if profile.availabilities.exists() and not any(
-                speaker_availability.contains(availability)
-                for speaker_availability in profile.availabilities.all()
-            ):
-                warnings.append(
-                    {
-                        'type': 'speaker',
-                        'speaker': {
-                            'name': speaker.get_display_name(),
-                            'id': speaker.pk,
-                        },
-                        'message': _(
-                            'A speaker is not available at the scheduled time.'
-                        ),
-                    }
-                )
-            overlaps = TalkSlot.objects.filter(
-                schedule=self.schedule, submission__speakers__in=[speaker]
-            ).filter(
-                models.Q(start__lt=self.start, end__gt=self.start)
-                | models.Q(start__lt=self.end, end__gt=self.end)
-            ).exists()
-            if overlaps:
-                warnings.append(
-                    {
-                        'type': 'speaker',
-                        'speaker': {
-                            'name': speaker.get_display_name(),
-                            'id': speaker.pk,
-                        },
-                        'message': _(
-                            'A speaker is giving another talk at the scheduled time.'
-                        ),
-                    }
-                )
-
-        return warnings
 
     def copy_to_schedule(self, new_schedule, save=True):
         """Create a new slot for the given.
@@ -163,35 +134,79 @@ class TalkSlot(LogMixin, models.Model):
         """
         new_slot = TalkSlot(schedule=new_schedule)
 
-        for field in [f for f in self._meta.fields if f.name not in ('id', 'schedule')]:
+        for field in [f for f in self._meta.fields if f.name not in ("id", "schedule")]:
             setattr(new_slot, field.name, getattr(self, field.name))
 
         if save:
             new_slot.save()
         return new_slot
 
+    copy_to_schedule.alters_data = True
+
     def is_same_slot(self, other_slot) -> bool:
         """Checks if both slots have the same room and start time."""
         return self.room == other_slot.room and self.start == other_slot.start
 
-    def build_ical(self, calendar, creation_time=None, netloc=None):
-        if not self.start or not self.end or not self.room:
-            return
-        creation_time = creation_time or datetime.now(pytz.utc)
-        netloc = netloc or urlparse(get_base_url(self.event)).netloc
-        tz = pytz.timezone(self.submission.event.timezone)
+    @cached_property
+    def id_suffix(self):
+        if not self.event.feature_flags["present_multiple_times"]:
+            return ""
+        all_slots = list(
+            TalkSlot.objects.filter(
+                submission_id=self.submission_id, schedule_id=self.schedule_id
+            )
+        )
+        if len(all_slots) == 1:
+            return ""
+        return "-" + str(all_slots.index(self))
 
-        vevent = calendar.add('vevent')
+    @cached_property
+    def frab_slug(self):
+        title = re.sub(r"\W+", "-", self.submission.title)
+        legal_chars = string.ascii_letters + string.digits + "-"
+        pattern = f"[^{legal_chars}]+"
+        title = re.sub(pattern, "", title)
+        title = title.lower()
+        title = title.strip("_")
+        return f"{self.event.slug}-{self.submission.pk}{self.id_suffix}-{title}"
+
+    @cached_property
+    def uuid(self):
+        """A UUID5, calculated from the submission code and the instance
+        identifier."""
+        global INSTANCE_IDENTIFIER
+        if not INSTANCE_IDENTIFIER:
+            from pretalx.common.models.settings import GlobalSettings
+
+            INSTANCE_IDENTIFIER = GlobalSettings().get_instance_identifier()
+        return uuid.uuid5(INSTANCE_IDENTIFIER, self.submission.code + self.id_suffix)
+
+    def build_ical(self, calendar, creation_time=None, netloc=None):
+        if not self.start or not self.local_end or not self.room or not self.submission:
+            return
+        creation_time = creation_time or dt.datetime.now(pytz.utc)
+        netloc = netloc or urlparse(get_base_url(self.event)).netloc
+
+        vevent = calendar.add("vevent")
         vevent.add(
-            'summary'
-        ).value = f'{self.submission.title} - {self.submission.display_speaker_names}'
-        vevent.add('dtstamp').value = creation_time
-        vevent.add('location').value = str(self.room.name)
-        vevent.add('uid').value = 'pretalx-{}-{}@{}'.format(
-            self.submission.event.slug, self.submission.code, netloc
+            "summary"
+        ).value = f"{self.submission.title} - {self.submission.display_speaker_names}"
+        vevent.add("dtstamp").value = creation_time
+        vevent.add("location").value = str(self.room.name)
+        vevent.add("uid").value = "pretalx-{}-{}{}@{}".format(
+            self.submission.event.slug, self.submission.code, self.id_suffix, netloc
         )
 
-        vevent.add('dtstart').value = self.start.astimezone(tz)
-        vevent.add('dtend').value = self.end.astimezone(tz)
-        vevent.add('description').value = self.submission.abstract or ""
-        vevent.add('url').value = self.submission.urls.public.full()
+        vevent.add("dtstart").value = self.local_start
+        vevent.add("dtend").value = self.local_end
+        vevent.add("description").value = self.submission.abstract or ""
+        vevent.add("url").value = self.submission.urls.public.full()
+
+    def full_ical(self):
+        netloc = urlparse(settings.SITE_URL).netloc
+        cal = vobject.iCalendar()
+        cal.add("prodid").value = "-//pretalx//{}//{}".format(
+            netloc, self.submission.code
+        )
+        self.build_ical(cal)
+        return cal

@@ -1,0 +1,131 @@
+name: Code Style
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - 'src/pretalx/locale/**'
+      - 'src/pretalx/static/**'
+      - 'doc/**'
+  pull_request:
+    branches: [ main ]
+    paths-ignore:
+      - 'src/pretalx/locale/**'
+      - 'src/pretalx/static/**'
+      - 'doc/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  isort:
+    name: isort
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.9
+      - uses: actions/cache@v1
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('src/setup.py') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+      - name: Install Dependencies
+        run: python -m pip install -Ue "src[dev]"
+      - name: Run isort
+        run: isort -c .
+        working-directory: ./src
+  flake:
+    name: flake8
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.9
+      - uses: actions/cache@v1
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('src/setup.py') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+      - name: Install Dependencies
+        run: python -m pip install -Ue "src[dev]"
+      - name: Run flake8
+        run: flake8 .
+        working-directory: ./src
+  black:
+    name: black
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.9
+      - uses: actions/cache@v1
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('src/setup.py') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+      - name: Install Dependencies
+        run: python -m pip install -Ue "src[dev]"
+      - name: Run black
+        run: black --check .
+        working-directory: ./src
+  djhtml:
+    name: djhtml
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.9
+      - uses: actions/cache@v1
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('src/setup.py') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+      - name: Install Dependencies
+        run: python -m pip install -Ue "src[dev]"
+      - name: Run djhtml
+        run: 'find -name "*.html" | xargs djhtml -c'
+        working-directory: ./src
+  packaging:
+    name: packaging
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.9
+      - uses: actions/cache@v1
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('src/setup.py') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+      - name: Install Dependencies
+        run: python -m pip install twine wheel -Ue "src[dev]"
+      - name: Install system dependencies
+        run: |
+          sudo apt update
+          sudo apt install gettext
+      - name: Run check-manifest
+        run: check-manifest .
+        working-directory: ./src
+      - name: Build package
+        run: python -m build -n
+        working-directory: ./src
+      - name: Check package
+        run: twine check dist/*
+        working-directory: ./src

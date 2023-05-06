@@ -3,18 +3,18 @@ from django.forms import CheckboxSelectMultiple, RadioSelect
 
 
 class HeaderSelect(RadioSelect):
-    option_template_name = 'orga/widgets/header_option.html'
+    option_template_name = "orga/widgets/header_option.html"
 
 
 class MultipleLanguagesWidget(CheckboxSelectMultiple):
-    option_template_name = 'orga/widgets/multi_languages_widget.html'
+    option_template_name = "orga/widgets/multi_languages_widget.html"
 
     def sort(self):
         self.choices = sorted(
             self.choices,
-            key=lambda l: (
-                (0 if l[0] in settings.LANGUAGES_OFFICIAL else 1),
-                str(l[1]),
+            key=lambda locale: (
+                not settings.LANGUAGES_INFORMATION[locale[0]].get("official"),
+                str(locale[1]),
             ),
         )
 
@@ -29,9 +29,11 @@ class MultipleLanguagesWidget(CheckboxSelectMultiple):
     def create_option(
         self, name, value, label, selected, index, subindex=None, attrs=None
     ):
-        attrs['lang'] = value
+        attrs["lang"] = value
         opt = super().create_option(
             name, value, label, selected, index, subindex, attrs
         )
-        opt['official'] = value in settings.LANGUAGES_OFFICIAL
+        language = settings.LANGUAGES_INFORMATION[value]
+        opt["official"] = bool(language.get("official"))
+        opt["percentage"] = language["percentage"]
         return opt

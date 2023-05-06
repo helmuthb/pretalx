@@ -4,12 +4,12 @@
 
 {% block submission_content %}
     {% for entry in feedback %}
-    <div class="card feedback-card">
-        <div class="card-body">
-            {{ entry.review|rich_text }}
+        <div class="card feedback-card">
+            <div class="card-body">
+                {{ entry.review|rich_text }}
+            </div>
         </div>
-    </div>
     {% empty %}
-        {% trans "There has been no feedback for this talk yet." %}
+        {% translate "There has been no feedback for this session yet." %}
     {% endfor %}
 {% endblock %}

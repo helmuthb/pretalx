@@ -9,14 +9,14 @@ from pretalx.event.models import Event
 
 @pytest.fixture
 def valid_css():
-    return '''
+    return """
 body {
   background-color: #000;
   display: none;
 }
 .some-descriptor {
   /* Dotted borders are IN! */
-  border-style: dotted dashed solid double;
+  border-style: dotted dashed solid double;  /* more commenting */
   BORDER-color: red green blue yellow;
 }
 #best-descriptor {
@@ -27,18 +27,18 @@ body {
     border: 5px solid blue;
   }
 }
-'''
+"""
 
 
 @pytest.fixture
 def invalid_css(valid_css):
     return (
         valid_css
-        + '''
+        + """
 a.other-descriptor {
     content: url("https://malicious.site.com");
 }
-'''
+"""
     )
 
 
@@ -56,13 +56,16 @@ def test_invalid_css(invalid_css):
 def test_regenerate_css(event):
     from pretalx.common.tasks import regenerate_css
 
-    event.primary_color = '#00ff00'
+    event.primary_color = "#00ff00"
+    event.settings.widget_css_checksum = "placeholder"
     event.save()
     regenerate_css(event.pk)
     event = Event.objects.get(pk=event.pk)
-    for local_app in ['agenda', 'cfp']:
-        assert event.settings.get(f'{local_app}_css_file')
-        assert event.settings.get(f'{local_app}_css_checksum')
+    for local_app in ["agenda", "cfp"]:
+        assert event.settings.get(f"{local_app}_css_file")
+        assert event.settings.get(f"{local_app}_css_checksum")
+    assert event.settings.widget_css_checksum != "placeholder"
+    assert event.settings.widget_css
 
 
 @pytest.mark.django_db
@@ -73,9 +76,10 @@ def test_regenerate_css_no_color(event):
     event.save()
     regenerate_css(event.pk)
     event = Event.objects.get(pk=event.pk)
-    for local_app in ['agenda', 'cfp']:
-        assert not event.settings.get(f'{local_app}_css_file')
-        assert not event.settings.get(f'{local_app}_css_checksum')
+    for local_app in ["agenda", "cfp"]:
+        assert not event.settings.get(f"{local_app}_css_file")
+        assert not event.settings.get(f"{local_app}_css_checksum")
+    assert not event.settings.widget_css
 
 
 @pytest.mark.django_db

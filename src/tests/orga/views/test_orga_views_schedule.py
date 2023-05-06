@@ -1,5 +1,6 @@
+import datetime as dt
 import json
-from datetime import datetime
+from uuid import uuid4
 
 import pytest
 import pytz
@@ -11,50 +12,221 @@ from pretalx.schedule.models import Availability, Schedule, TalkSlot
 
 
 @pytest.mark.django_db
-@pytest.mark.usefixtures('accepted_submission')
-def test_talk_list(orga_client, event):
+@pytest.mark.usefixtures("accepted_submission")
+def test_talk_list(orga_client, event, break_slot):
     response = orga_client.get(
-        reverse(f'orga:schedule.api.talks', kwargs={'event': event.slug}), follow=True
+        reverse("orga:schedule.api.talks", kwargs={"event": event.slug}), follow=True
     )
     content = json.loads(response.content.decode())
     assert response.status_code == 200
-    assert len(content['results']) == 1
-    assert content['results'][0]['title']
+    assert len(content["results"]) == 2
+    assert len([talk for talk in content["results"] if talk["title"]])
 
 
 @pytest.mark.django_db
-@pytest.mark.usefixtures('accepted_submission', 'slot')
+@pytest.mark.usefixtures("accepted_submission", "slot")
 def test_talk_list_with_filter(orga_client, event, schedule):
     response = orga_client.get(
-        reverse(f'orga:schedule.api.talks', kwargs={'event': event.slug}),
-        data={'version': schedule.version},
+        reverse("orga:schedule.api.talks", kwargs={"event": event.slug}),
+        data={"version": schedule.version},
         follow=True,
     )
     content = json.loads(response.content.decode())
     assert response.status_code == 200
-    assert len(content['results']) == 2
-    assert content['results'][0]['title']
+    assert len(content["results"]) == 2
+    assert content["results"][0]["title"]
 
 
 @pytest.mark.django_db
-def test_talk_schedule_api_update(orga_client, event, schedule, slot, room):
+def test_talk_schedule_api_create_break(orga_client, event, schedule, room):
+    with scope(event=event):
+        slot_count = event.wip_schedule.talks.count()
+    response = orga_client.post(
+        reverse("orga:schedule.api.talks", kwargs={"event": event.slug}),
+        json.dumps({"room": room.pk, "duration": 50, "description": "Break"}),
+        content_type="application/json",
+        follow=True,
+    )
+    assert response.status_code == 200
+    with scope(event=event):
+        assert event.wip_schedule.talks.count() == slot_count + 1
+        slot = event.wip_schedule.talks.filter(submission__isnull=True).first()
+        assert slot
+        assert slot.description == "Break"
+        assert slot.room == room
+        assert slot.duration == 50
+
+
+@pytest.mark.parametrize("with_room", (True, False))
+@pytest.mark.django_db
+def test_talk_schedule_api_update(orga_client, event, schedule, slot, room, with_room):
     with scope(event=event):
         slot = event.wip_schedule.talks.first()
         start = now()
         assert slot.start != start
     response = orga_client.patch(
         reverse(
-            f'orga:schedule.api.update', kwargs={'event': event.slug, 'pk': slot.pk}
+            "orga:schedule.api.update", kwargs={"event": event.slug, "pk": slot.pk}
         ),
-        data=json.dumps({'room': room.pk, 'start': start.isoformat()}),
+        data=json.dumps(
+            {"room": room.pk if with_room else None, "start": start.isoformat()}
+        ),
         follow=True,
     )
+    assert response.status_code == 200
     with scope(event=event):
         slot.refresh_from_db()
         content = json.loads(response.content.decode())
-        assert content['title'] == slot.submission.title
+        assert content["title"] == slot.submission.title
         assert slot.start == start
         assert slot.room == room
+
+
+@pytest.mark.django_db
+def test_talk_schedule_api_update_wrong_slot(orga_client, event, schedule, slot):
+    with scope(event=event):
+        slot = event.wip_schedule.talks.first()
+        start = now()
+        assert slot.start != start
+    response = orga_client.patch(
+        reverse(
+            "orga:schedule.api.update",
+            kwargs={"event": event.slug, "pk": slot.pk + 100},
+        ),
+        data=json.dumps({"room": 100, "start": start.isoformat()}),
+        follow=True,
+    )
+    assert response.status_code == 200
+    assert response.json() == {"error": "Talk not found"}
+
+
+@pytest.mark.django_db
+def test_talk_schedule_api_update_break_slot(
+    orga_client, event, schedule, break_slot, room
+):
+    with scope(event=event):
+        slot = event.wip_schedule.talks.first()
+        start = now()
+        assert slot.start != start
+    response = orga_client.patch(
+        reverse(
+            "orga:schedule.api.update", kwargs={"event": event.slug, "pk": slot.pk}
+        ),
+        data=json.dumps(
+            {
+                "room": room.pk,
+                "start": start.isoformat(),
+                "duration": 90,
+                "description": "New break",
+            }
+        ),
+        follow=True,
+    )
+    assert response.status_code == 200
+    with scope(event=event):
+        slot.refresh_from_db()
+        assert slot.duration == 90
+        assert str(slot.description) == "New break"
+        assert slot.start == start
+        assert slot.room == room
+
+
+@pytest.mark.django_db
+def test_talk_schedule_api_update_break_slot_explicit_end(
+    orga_client, event, schedule, break_slot, room
+):
+    with scope(event=event):
+        slot = event.wip_schedule.talks.first()
+        start = now()
+        assert slot.start != start
+    response = orga_client.patch(
+        reverse(
+            "orga:schedule.api.update", kwargs={"event": event.slug, "pk": slot.pk}
+        ),
+        data=json.dumps(
+            {
+                "room": room.pk,
+                "start": start.isoformat(),
+                "end": (start + dt.timedelta(minutes=90)).isoformat(),
+                "description": "New break",
+            }
+        ),
+        follow=True,
+    )
+    assert response.status_code == 200
+    with scope(event=event):
+        slot.refresh_from_db()
+        assert slot.duration == 90
+        assert str(slot.description) == "New break"
+        assert slot.start == start
+        assert slot.room == room
+
+
+@pytest.mark.django_db
+def test_talk_schedule_api_update_break_slot_no_duration(
+    orga_client, event, schedule, break_slot, room
+):
+    with scope(event=event):
+        slot = event.wip_schedule.talks.first()
+        start = now()
+        assert slot.start != start
+        previous_duration = slot.duration
+    response = orga_client.patch(
+        reverse(
+            "orga:schedule.api.update", kwargs={"event": event.slug, "pk": slot.pk}
+        ),
+        data=json.dumps({"room": room.pk, "start": start.isoformat()}),
+        follow=True,
+    )
+    assert response.status_code == 200
+    with scope(event=event):
+        slot.refresh_from_db()
+        assert slot.duration == previous_duration
+        assert slot.start == start
+        assert slot.room == room
+
+
+@pytest.mark.django_db
+def test_talk_schedule_api_delete_slot(orga_client, event, schedule, break_slot):
+    with scope(event=event):
+        slot = event.wip_schedule.talks.first()
+        slot_count = event.wip_schedule.talks.count()
+    response = orga_client.delete(
+        reverse(
+            "orga:schedule.api.update", kwargs={"event": event.slug, "pk": slot.pk}
+        ),
+        follow=True,
+    )
+    assert response.status_code == 200
+    with scope(event=event):
+        assert event.wip_schedule.talks.count() == slot_count - 1
+
+
+@pytest.mark.django_db
+def test_talk_schedule_api_do_not_delete_slot_with_submission(
+    orga_client, event, schedule, slot
+):
+    with scope(event=event):
+        slot = event.wip_schedule.talks.first()
+        slot_count = event.wip_schedule.talks.count()
+    response = orga_client.delete(
+        reverse(
+            "orga:schedule.api.update", kwargs={"event": event.slug, "pk": slot.pk}
+        ),
+        follow=True,
+    )
+    assert response.status_code == 200
+    with scope(event=event):
+        assert event.wip_schedule.talks.count() == slot_count
+
+
+@pytest.mark.django_db
+def test_talk_schedule_api_delete_bogus_slot(orga_client, event, schedule):
+    response = orga_client.delete(
+        reverse("orga:schedule.api.update", kwargs={"event": event.slug, "pk": 100}),
+        follow=True,
+    )
+    assert response.status_code == 200
 
 
 @pytest.mark.django_db
@@ -67,20 +239,20 @@ def test_talk_schedule_api_update_reset(orga_client, event, schedule, slot, room
         assert slot.start
     response = orga_client.patch(
         reverse(
-            f'orga:schedule.api.update', kwargs={'event': event.slug, 'pk': slot.pk}
+            "orga:schedule.api.update", kwargs={"event": event.slug, "pk": slot.pk}
         ),
-        data=json.dumps(dict()),
+        data=json.dumps({}),
         follow=True,
     )
     with scope(event=event):
         slot.refresh_from_db()
         content = json.loads(response.content.decode())
-        assert content['title'] == slot.submission.title
+        assert content["title"] == slot.submission.title
         assert not slot.start
         assert not slot.room
 
 
-@pytest.mark.usefixtures('accepted_submission')
+@pytest.mark.usefixtures("accepted_submission")
 @pytest.mark.django_db
 def test_api_availabilities(orga_client, event, room, speaker, confirmed_submission):
     with scope(event=event):
@@ -88,29 +260,73 @@ def test_api_availabilities(orga_client, event, room, speaker, confirmed_submiss
         Availability.objects.create(
             event=event,
             room=room,
-            start=datetime(2017, 1, 1, 1, tzinfo=pytz.utc),
-            end=datetime(2017, 1, 1, 5, tzinfo=pytz.utc),
+            start=dt.datetime(2017, 1, 1, 1, tzinfo=pytz.utc),
+            end=dt.datetime(2017, 1, 1, 5, tzinfo=pytz.utc),
         )
         Availability.objects.create(
             event=event,
             person=speaker.profiles.first(),
-            start=datetime(2017, 1, 1, 3, tzinfo=pytz.utc),
-            end=datetime(2017, 1, 1, 6, tzinfo=pytz.utc),
+            start=dt.datetime(2017, 1, 1, 3, tzinfo=pytz.utc),
+            end=dt.datetime(2017, 1, 1, 6, tzinfo=pytz.utc),
         )
 
     response = orga_client.get(
         reverse(
-            f'orga:schedule.api.availabilities',
-            kwargs={'event': event.slug, 'talkid': talk.pk, 'roomid': room.pk},
+            "orga:schedule.api.availabilities",
+            kwargs={"event": event.slug, "talkid": talk.pk, "roomid": room.pk},
         ),
         follow=True,
     )
 
     content = json.loads(response.content.decode())
     assert response.status_code == 200
-    assert len(content['results']) == 1
-    assert content['results'][0]['start'] == '2017-01-01T03:00:00Z'
-    assert content['results'][0]['end'] == '2017-01-01T05:00:00Z'
+    assert len(content["results"]) == 1
+    assert content["results"][0]["start"] == "2017-01-01T03:00:00Z"
+    assert content["results"][0]["end"] == "2017-01-01T05:00:00Z"
+
+
+@pytest.mark.django_db
+def test_api_availabilities_empty(
+    orga_client, event, room, speaker, confirmed_submission
+):
+    response = orga_client.get(
+        reverse(
+            "orga:schedule.api.availabilities",
+            kwargs={"event": event.slug, "talkid": 100, "roomid": room.pk},
+        ),
+        follow=True,
+    )
+    assert response.status_code == 200
+    assert response.json() == {"results": []}
+
+
+@pytest.mark.usefixtures("accepted_submission")
+@pytest.mark.django_db
+def test_api_availabilities_only_room(
+    orga_client, event, room, speaker, confirmed_submission
+):
+    with scope(event=event):
+        talk = TalkSlot.objects.get(submission=confirmed_submission)
+        Availability.objects.create(
+            event=event,
+            room=room,
+            start=dt.datetime(2017, 1, 1, 1, tzinfo=pytz.utc),
+            end=dt.datetime(2017, 1, 1, 5, tzinfo=pytz.utc),
+        )
+
+    response = orga_client.get(
+        reverse(
+            "orga:schedule.api.availabilities",
+            kwargs={"event": event.slug, "talkid": talk.pk, "roomid": room.pk},
+        ),
+        follow=True,
+    )
+
+    content = json.loads(response.content.decode())
+    assert response.status_code == 200
+    assert len(content["results"]) == 1
+    assert content["results"][0]["start"] == "2017-01-01T01:00:00Z"
+    assert content["results"][0]["end"] == "2017-01-01T05:00:00Z"
 
 
 @pytest.mark.django_db
@@ -127,9 +343,9 @@ def test_orga_can_quick_schedule_submission(
     response = orga_client.post(
         accepted_submission.orga_urls.quick_schedule,
         data={
-            'start_date': event.date_from.strftime('%Y-%m-%d'),
-            'start_time': '10:00:00',
-            'room': room.pk,
+            "start_date": event.date_from.strftime("%Y-%m-%d"),
+            "start_time": "10:00:00",
+            "room": room.pk,
         },
         follow=True,
     )
@@ -141,16 +357,16 @@ def test_orga_can_quick_schedule_submission(
 
 
 @pytest.mark.django_db
-@pytest.mark.usefixtures('accepted_submission')
-@pytest.mark.usefixtures('room')
+@pytest.mark.usefixtures("accepted_submission")
+@pytest.mark.usefixtures("room")
 def test_orga_can_see_schedule(orga_client, event):
     response = orga_client.get(event.orga_urls.schedule, follow=True)
     assert response.status_code == 200
 
 
 @pytest.mark.django_db
-@pytest.mark.usefixtures('accepted_submission')
-@pytest.mark.usefixtures('room')
+@pytest.mark.usefixtures("accepted_submission")
+@pytest.mark.usefixtures("room")
 def test_orga_can_see_schedule_release_view(orga_client, event):
     response = orga_client.get(event.orga_urls.release_schedule, follow=True)
     assert response.status_code == 200
@@ -161,7 +377,7 @@ def test_orga_cannot_reset_to_wrong_version(orga_client, event):
     with scope(event=event):
         assert Schedule.objects.count() == 1
     response = orga_client.get(
-        event.orga_urls.reset_schedule, follow=True, data={'version': 'Test version 2'}
+        event.orga_urls.reset_schedule, follow=True, data={"version": "Test version 2"}
     )
     assert response.status_code == 200
     with scope(event=event):
@@ -169,21 +385,21 @@ def test_orga_cannot_reset_to_wrong_version(orga_client, event):
 
 
 @pytest.mark.django_db
-@pytest.mark.usefixtures('accepted_submission')
-@pytest.mark.usefixtures('room')
+@pytest.mark.usefixtures("accepted_submission")
+@pytest.mark.usefixtures("room")
 def test_orga_can_release_and_reset_schedule(orga_client, event):
     with scope(event=event):
         assert Schedule.objects.count() == 1
     response = orga_client.post(
         event.orga_urls.release_schedule,
         follow=True,
-        data={'version': 'Test version 2'},
+        data={"version": "Test version 2"},
     )
     assert response.status_code == 200
     with scope(event=event):
         assert Schedule.objects.count() == 2
     response = orga_client.get(
-        event.orga_urls.reset_schedule, follow=True, data={'version': 'Test version 2'}
+        event.orga_urls.reset_schedule, follow=True, data={"version": "Test version 2"}
     )
     assert response.status_code == 200
     with scope(event=event):
@@ -191,24 +407,24 @@ def test_orga_can_release_and_reset_schedule(orga_client, event):
 
 
 @pytest.mark.django_db
-@pytest.mark.usefixtures('accepted_submission')
-@pytest.mark.usefixtures('room')
+@pytest.mark.usefixtures("accepted_submission")
+@pytest.mark.usefixtures("room")
 def test_orga_cannot_reuse_schedule_name(orga_client, event):
     with scope(event=event):
         assert Schedule.objects.count() == 1
     response = orga_client.post(
         event.orga_urls.release_schedule,
         follow=True,
-        data={'version': 'Test version 2'},
+        data={"version": "Test version 2"},
     )
     assert response.status_code == 200
     with scope(event=event):
         assert Schedule.objects.count() == 2
-        assert Schedule.objects.get(version='Test version 2')
+        assert Schedule.objects.get(version="Test version 2")
     response = orga_client.post(
         event.orga_urls.release_schedule,
         follow=True,
-        data={'version': 'Test version 2'},
+        data={"version": "Test version 2"},
     )
     assert response.status_code == 200
     with scope(event=event):
@@ -219,18 +435,18 @@ def test_orga_cannot_reuse_schedule_name(orga_client, event):
 def test_orga_can_toggle_schedule_visibility(orga_client, event):
     from pretalx.event.models import Event
 
-    assert event.settings.show_schedule is True
+    assert event.feature_flags["show_schedule"] is True
 
     response = orga_client.get(event.orga_urls.toggle_schedule, follow=True)
     assert response.status_code == 200
     event = Event.objects.get(pk=event.pk)
-    assert event.settings.show_schedule is False
+    assert event.feature_flags["show_schedule"] is False
 
     response = orga_client.get(event.orga_urls.toggle_schedule, follow=True)
     assert response.status_code == 200
     event = Event.objects.get(pk=event.pk)
     with scope(event=event):
-        assert event.settings.show_schedule is True
+        assert event.feature_flags["show_schedule"] is True
 
 
 @pytest.mark.django_db
@@ -241,13 +457,14 @@ def test_create_room(orga_client, event, availability):
         event.orga_urls.new_room,
         follow=True,
         data={
-            'name_0': 'A room',
-            'availabilities': json.dumps(
+            "name_0": "A room",
+            "guid": uuid4(),
+            "availabilities": json.dumps(
                 {
-                    'availabilities': [
+                    "availabilities": [
                         {
-                            'start': availability.start.strftime('%Y-%m-%d %H:%M:00Z'),
-                            'end': availability.end.strftime('%Y-%m-%d %H:%M:00Z'),
+                            "start": availability.start.strftime("%Y-%m-%d %H:%M:00Z"),
+                            "end": availability.end.strftime("%Y-%m-%d %H:%M:00Z"),
                         }
                     ]
                 }
@@ -257,27 +474,31 @@ def test_create_room(orga_client, event, availability):
     assert response.status_code == 200
     with scope(event=event):
         assert event.rooms.count() == 1
-        assert str(event.rooms.first().name) == 'A room'
+        assert str(event.rooms.first().name) == "A room"
         assert event.rooms.first().availabilities.count() == 1
         assert event.rooms.first().availabilities.first().start == availability.start
 
 
 @pytest.mark.django_db
-@pytest.mark.usefixtures('room_availability')
+@pytest.mark.usefixtures("room_availability")
 def test_edit_room(orga_client, event, room):
     with scope(event=event):
         assert event.rooms.count() == 1
         assert event.rooms.first().availabilities.count() == 1
-        assert str(event.rooms.first().name) != 'A room'
+        assert str(event.rooms.first().name) != "A room"
     response = orga_client.post(
         room.urls.edit,
         follow=True,
-        data={'name_0': 'A room', 'availabilities': '{"availabilities": []}'},
+        data={
+            "name_0": "A room",
+            "guid": uuid4(),
+            "availabilities": '{"availabilities": []}',
+        },
     )
     assert response.status_code == 200
     with scope(event=event):
         assert event.rooms.count() == 1
-        assert str(event.rooms.first().name) == 'A room'
+        assert str(event.rooms.first().name) == "A room"
         assert event.rooms.first().availabilities.count() == 0
 
 
@@ -367,13 +588,158 @@ def test_move_rooms_in_list_down_out_of_bounds(orga_client, room, other_room, ev
 
 
 @pytest.mark.django_db
+def test_move_rooms_in_list_without_room(orga_client, room, other_room, event):
+    with scope(event=event):
+        assert event.rooms.count() == 2
+        room.position = 0
+        room.save()
+        other_room.position = 1
+        other_room.save()
+    orga_client.post(
+        other_room.urls.down.replace(str(other_room.pk), str(other_room.pk + 100)),
+        follow=True,
+    )
+    with scope(event=event):
+        room.refresh_from_db()
+        other_room.refresh_from_db()
+        assert room.position == 0
+        assert other_room.position == 1
+
+
+@pytest.mark.django_db
+def test_reviewer_cannot_move_rooms_in_list_down(
+    review_client, room, other_room, event
+):
+    with scope(event=event):
+        assert event.rooms.count() == 2
+        room.position = 0
+        room.save()
+        other_room.position = 1
+        other_room.save()
+    review_client.post(room.urls.down, follow=True)
+    with scope(event=event):
+        room.refresh_from_db()
+        other_room.refresh_from_db()
+        assert room.position == 0
+        assert other_room.position == 1
+
+
+@pytest.mark.django_db
 def test_regenerate_speaker_notifications(orga_client, event, slot):
     with scope(event=event):
         queue_count = event.queued_mails.count()
     response = orga_client.post(
-        event.orga_urls.schedule + 'resend_mails',
+        event.orga_urls.schedule + "resend_mails",
         follow=True,
     )
     assert response.status_code == 200
     with scope(event=event):
         assert event.queued_mails.count() > queue_count
+
+
+@pytest.mark.django_db
+def test_regenerate_speaker_notifications_before_schedule(orga_client, event):
+    with scope(event=event):
+        queue_count = event.queued_mails.count()
+    response = orga_client.post(
+        event.orga_urls.schedule + "resend_mails",
+        follow=True,
+    )
+    assert response.status_code == 200
+    assert (
+        "You can only regenerate mails after the first schedule was released."
+        in response.content.decode()
+    )
+    with scope(event=event):
+        assert event.queued_mails.count() == queue_count
+
+
+@pytest.mark.django_db
+def test_orga_cant_export_answers_csv_empty(orga_client, speaker, event, submission):
+    response = orga_client.post(
+        event.orga_urls.schedule_export,
+        data={
+            "target": "rejected",
+            "title": "on",
+            "export_format": "csv",
+        },
+    )
+    assert response.status_code == 200
+    assert (
+        response.content.decode().strip().startswith("<!DOCTYPE")
+    )  # HTML response instead of empty download
+
+
+@pytest.mark.django_db
+def test_orga_cant_export_answers_csv_without_delimiter(
+    orga_client, speaker, event, submission, answered_choice_question
+):
+    with scope(event=event):
+        answered_choice_question.target = "submission"
+        answered_choice_question.save()
+    response = orga_client.post(
+        event.orga_urls.schedule_export,
+        data={
+            "target": "all",
+            "title": "on",
+            f"question_{answered_choice_question.id}": "on",
+            "export_format": "csv",
+        },
+    )
+    assert response.status_code == 200
+    assert response.content.decode().strip().startswith("<!DOCTYPE")
+
+
+@pytest.mark.django_db
+def test_orga_can_export_answers_csv(
+    orga_client, speaker, event, submission, answered_choice_question
+):
+    with scope(event=event):
+        answered_choice_question.target = "submission"
+        answered_choice_question.save()
+        answer = answered_choice_question.answers.all().first().answer_string
+    response = orga_client.post(
+        event.orga_urls.schedule_export,
+        data={
+            "target": "all",
+            "title": "on",
+            f"question_{answered_choice_question.id}": "on",
+            "speaker_ids": "on",
+            "export_format": "csv",
+            "data_delimiter": "comma",
+        },
+    )
+    assert response.status_code == 200
+    assert (
+        response.content.decode()
+        == f"ID,Proposal title,Speaker IDs,{answered_choice_question.question}\r\n{submission.code},{submission.title},{speaker.code},{answer}\r\n"
+    )
+
+
+@pytest.mark.django_db
+def test_orga_can_export_answers_json(
+    orga_client, speaker, event, submission, answered_choice_question
+):
+    with scope(event=event):
+        answered_choice_question.target = "submission"
+        answered_choice_question.save()
+        answer = answered_choice_question.answers.all().first().answer_string
+    response = orga_client.post(
+        event.orga_urls.schedule_export,
+        data={
+            "target": "all",
+            "title": "on",
+            f"question_{answered_choice_question.id}": "on",
+            "speaker_ids": "on",
+            "export_format": "json",
+        },
+    )
+    assert response.status_code == 200
+    assert json.loads(response.content.decode()) == [
+        {
+            "ID": submission.code,
+            "Proposal title": submission.title,
+            answered_choice_question.question: answer,
+            "Speaker IDs": [speaker.code],
+        }
+    ]

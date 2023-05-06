@@ -2,96 +2,80 @@ from datetime import date
 
 import pytest
 from django.utils import translation
+from i18nfield.strings import LazyI18nString
 
-from pretalx.common.utils import daterange
-
-
-def test_same_day_german():
-    with translation.override('de'):
-        df = date(2003, 2, 1)
-        assert daterange(df, df) == "1. Februar 2003"
+from pretalx.common.utils import I18nStrJSONEncoder, daterange, safe_filename
 
 
-def test_same_day_english():
-    with translation.override('en'):
-        df = date(2003, 2, 1)
-        assert daterange(df, df) == "Feb. 1st, 2003"
+@pytest.mark.parametrize(
+    "locale,start,end,result",
+    (
+        ("de", date(2003, 2, 1), date(2003, 2, 1), "1. Februar 2003"),
+        ("en", date(2003, 2, 1), date(2003, 2, 1), "Feb. 1st, 2003"),
+        ("es", date(2003, 2, 1), date(2003, 2, 1), "1 de Febrero de 2003"),
+        ("de", date(2003, 2, 1), date(2003, 2, 3), "1.–3. Februar 2003"),
+        ("en", date(2003, 2, 1), date(2003, 2, 3), "Feb. 1st – 3rd, 2003"),
+        ("es", date(2003, 2, 1), date(2003, 2, 3), "1 - 3 de Febrero de 2003"),
+        ("de", date(2003, 2, 1), date(2003, 4, 3), "1. Februar – 3. April 2003"),
+        ("en", date(2003, 2, 1), date(2003, 4, 3), "Feb. 1st – April 3rd, 2003"),
+        ("es", date(2003, 2, 1), date(2003, 4, 3), "1 de Febrero - 3 de Abril de 2003"),
+        ("de", date(2003, 2, 1), date(2005, 4, 3), "1. Februar 2003 – 3. April 2005"),
+        ("en", date(2003, 2, 1), date(2005, 4, 3), "Feb. 1, 2003 – April 3, 2005"),
+        (
+            "es",
+            date(2003, 2, 1),
+            date(2005, 4, 3),
+            "1 de Febrero de 2003 -3 de Abril de 2005",
+        ),
+    ),
+)
+def test_daterange(locale, start, end, result):
+    with translation.override(locale):
+        assert daterange(start, end) == result
 
 
-def test_same_day_spanish():
-    with translation.override('es'):
-        df = date(2003, 2, 1)
-        assert daterange(df, df) == "1 de Febrero de 2003"
-
-
-def test_same_month_german():
-    with translation.override('de'):
-        df = date(2003, 2, 1)
-        dt = date(2003, 2, 3)
-        assert daterange(df, dt) == "1.–3. Februar 2003"
-
-
-def test_same_month_english():
-    with translation.override('en'):
-        df = date(2003, 2, 1)
-        dt = date(2003, 2, 3)
-        assert daterange(df, dt) == "Feb. 1st – 3rd, 2003"
-
-
-def test_same_month_spanish():
-    with translation.override('es'):
-        df = date(2003, 2, 1)
-        dt = date(2003, 2, 3)
-        assert daterange(df, dt) == "1 - 3 de Febrero de 2003"
-
-
-def test_same_year_german():
-    with translation.override('de'):
-        df = date(2003, 2, 1)
-        dt = date(2003, 4, 3)
-        assert daterange(df, dt) == "1. Februar – 3. April 2003"
-
-
-def test_same_year_english():
-    with translation.override('en'):
-        df = date(2003, 2, 1)
-        dt = date(2003, 4, 3)
-        assert daterange(df, dt) == "Feb. 1st – April 3rd, 2003"
-
-
-def test_different_dates_spanish():
-    with translation.override('es'):
-        df = date(2003, 2, 1)
-        dt = date(2005, 4, 3)
-        assert daterange(df, dt) == "1 de Febrero de 2003 – 3 de Abril de 2005"
-
-
-def test_different_dates_german():
-    with translation.override('de'):
-        df = date(2003, 2, 1)
-        dt = date(2005, 4, 3)
-        assert daterange(df, dt) == "1. Februar 2003 – 3. April 2005"
-
-
-def test_different_dates_english():
-    with translation.override('en'):
-        df = date(2003, 2, 1)
-        dt = date(2005, 4, 3)
-        assert daterange(df, dt) == "Feb. 1, 2003 – April 3, 2005"
-
-
-@pytest.mark.parametrize('path,expected', (
-    ('foo.bar', 'foo_aaaaaaa.bar'),
-    ('foo_.bar', 'foo__aaaaaaa.bar'),
-    ('foo', 'foo_aaaaaaa'),
-    ('/home/foo.bar', '/home/foo_aaaaaaa.bar'),
-    ('/home/foo_.bar', '/home/foo__aaaaaaa.bar'),
-    ('/home/foo', '/home/foo_aaaaaaa'),
-    ('home/foo.bar', 'home/foo_aaaaaaa.bar'),
-    ('home/foo_.bar', 'home/foo__aaaaaaa.bar'),
-    ('home/foo', 'home/foo_aaaaaaa'),
-))
+@pytest.mark.parametrize(
+    "path,expected",
+    (
+        ("foo.bar", "foo_aaaaaaa.bar"),
+        ("foo_.bar", "foo__aaaaaaa.bar"),
+        ("foo", "foo_aaaaaaa"),
+        ("/home/foo.bar", "/home/foo_aaaaaaa.bar"),
+        ("/home/foo_.bar", "/home/foo__aaaaaaa.bar"),
+        ("/home/foo", "/home/foo_aaaaaaa"),
+        ("home/foo.bar", "home/foo_aaaaaaa.bar"),
+        ("home/foo_.bar", "home/foo__aaaaaaa.bar"),
+        ("home/foo", "home/foo_aaaaaaa"),
+    ),
+)
 def test_path_with_hash(path, expected, monkeypatch):
-    monkeypatch.setattr('pretalx.common.utils.get_random_string', lambda x: 'aaaaaaa')
+    monkeypatch.setattr("pretalx.common.utils.get_random_string", lambda x: "aaaaaaa")
     from pretalx.common.utils import path_with_hash
+
     assert path_with_hash(path) == expected
+
+
+@pytest.mark.parametrize(
+    "filename,expected",
+    (
+        ("ö", "o"),
+        ("å", "a"),
+        ("ø", ""),
+        ("α", ""),
+    ),
+)
+def test_safe_filename(filename, expected):
+    assert safe_filename(filename) == expected
+
+
+@pytest.mark.django_db
+def test_json_encoder_inheritance(event):
+    assert I18nStrJSONEncoder().default(event) == {"id": event.pk, "type": "Event"}
+
+
+@pytest.mark.django_db
+def test_json_encoder_i18nstr(event):
+    assert (
+        I18nStrJSONEncoder().default(LazyI18nString({"en": "foo", "de": "bar"}))
+        == "foo"
+    )

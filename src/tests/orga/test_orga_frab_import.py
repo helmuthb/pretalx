@@ -12,21 +12,19 @@ def test_frab_import_minimal(administrator):
     assert Event.objects.count() == 0
     assert administrator.teams.count() == 0
 
-    call_command(
-        'import_schedule', 'tests/fixtures/frab_schedule_minimal.xml'
-    )
+    call_command("import_schedule", "tests/fixtures/frab_schedule_minimal.xml")
 
     assert Event.objects.count() == 1
     event = Event.objects.first()
 
     with scope(event=event):
         assert Room.objects.count() == 1
-        assert Room.objects.all()[0].name == 'Volkskundemuseum'
+        assert Room.objects.all()[0].name == "Volkskundemuseum"
 
         assert TalkSlot.objects.count() == 2
-        assert TalkSlot.objects.order_by('pk')[0].schedule.version == '1.99b 🍕'
-        assert TalkSlot.objects.order_by('pk')[1].schedule.version is None
-        assert event.name == 'PrivacyWeek 2016'
+        assert TalkSlot.objects.order_by("pk")[0].schedule.version == "1.99b 🍕"
+        assert TalkSlot.objects.order_by("pk")[1].schedule.version is None
+        assert event.name == "PrivacyWeek 2016"
 
         assert (
             administrator.teams.filter(
@@ -36,10 +34,8 @@ def test_frab_import_minimal(administrator):
             == 1
         )
 
-        with pytest.raises(Exception):
-            call_command(
-                'import_schedule', 'tests/fixtures/frab_schedule_minimal.xml'
-            )
+        with pytest.raises(Exception):  # noqa
+            call_command("import_schedule", "tests/fixtures/frab_schedule_minimal.xml")
 
         assert (
             administrator.teams.filter(
@@ -51,10 +47,9 @@ def test_frab_import_minimal(administrator):
         assert Event.objects.count() == 1
         assert TalkSlot.objects.count() == 2
         assert Room.objects.count() == 1
+        event.organiser.teams.all().delete()
 
-        call_command(
-            'import_schedule', 'tests/fixtures/frab_schedule_minimal_2.xml'
-        )
+        call_command("import_schedule", "tests/fixtures/frab_schedule_minimal_2.xml")
 
         assert Room.objects.count() == 1
         assert Event.objects.count() == 1
@@ -65,7 +60,36 @@ def test_frab_import_minimal(administrator):
             ).count()
             == 1
         )
-        assert TalkSlot.objects.count() == 5  # 3 for the first talk, 2 for the second talk
-        assert set(event.schedules.all().values_list('version', flat=True)) == set(
-            ['1.99b 🍕', '1.99c 🍕', None]
+        assert (
+            TalkSlot.objects.count() == 5
+        )  # 3 for the first talk, 2 for the second talk
+        assert set(event.schedules.all().values_list("version", flat=True)) == {
+            "1.99b 🍕",
+            "1.99c 🍕",
+            None,
+        }
+
+
+@pytest.mark.django_db
+def test_frab_import_empty(administrator):
+    assert Event.objects.count() == 0
+    assert administrator.teams.count() == 0
+
+    call_command("import_schedule", "tests/fixtures/frab_schedule_empty.xml")
+
+    assert Event.objects.count() == 1
+    event = Event.objects.first()
+
+    with scope(event=event):
+        assert Room.objects.count() == 1
+        assert Room.objects.all()[0].name == "Volkskundemuseum"
+
+        assert TalkSlot.objects.count() == 0
+
+        assert (
+            administrator.teams.filter(
+                Q(limit_events__in=[event]) | Q(all_events=True),
+                can_change_event_settings=True,
+            ).count()
+            == 1
         )

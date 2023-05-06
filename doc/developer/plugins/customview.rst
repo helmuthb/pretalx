@@ -12,8 +12,8 @@ pretalx.
 
 .. _urlconf:
 
-Orga panel views
-----------------
+Organiser panel views
+---------------------
 
 If you want to add a custom view to the organiser area of an event, register an URL in your
 ``urls.py`` that lives in the ``/orga/`` subpath::
@@ -59,8 +59,8 @@ your views::
 There is also a signal that allows you to add the view to the event sidebar navigation like this::
 
 
-    from django.core.urlresolvers import resolve, reverse
     from django.dispatch import receiver
+    from django.urls import resolve, reverse
     from django.utils.translation import ugettext_lazy as _
     from pretalx.orga.signals import nav_event
 

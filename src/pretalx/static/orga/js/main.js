@@ -1,15 +1,14 @@
 document.addEventListener("DOMContentLoaded", function() {
   "use strict"
   $('[data-toggle="tooltip"]').tooltip()
-  if ($("#answer-options").length) {
-    $("#id_variant").change(question_page_toggle_view)
-    $("#id_required").change(question_page_toggle_view)
-    question_page_toggle_view()
-    if ($("#limit-submission").length) {
-      $("#id_target").change(question_page_toggle_tracks_view)
-      question_page_toggle_tracks_view()
-    }
+  function hideOptions (state) {
+    if (!state.id || !state.element) return state.text
+    if (state.element && state.element.classList.contains("hidden")) return
+    return state.text
   }
+  document.querySelectorAll(".select2").forEach(select => {
+    $(select).select2({placeholder: select.title, templateResult: hideOptions})
+  })
 
   $("input.submission_featured").change(function() {
     var id = this.dataset.id
@@ -62,44 +61,38 @@ document.addEventListener("DOMContentLoaded", function() {
       })
   })
 
-  $(".checkbox-multi-select input[type=checkbox]").change(ev => {
-    const checkbox = ev.target
-    var multiSelect = checkbox.parentNode
-    while (
-      multiSelect &&
-      !multiSelect.classList.contains("checkbox-multi-select")
-    ) {
-      multiSelect = multiSelect.parentNode
-    }
-    if (multiSelect) {
-      update_multi_select_caption(multiSelect)
-    }
-  })
 
-  document.querySelectorAll(".checkbox-multi-select").forEach(element => {
-    update_multi_select_caption(element)
-  })
-  $("#id_is_reviewer").change(ev => {
-    update_review_override_votes()
-  })
-  update_review_override_votes()
+  $(".keep-scroll-position").click(ev => {
+    sessionStorage.setItem('scroll-position', window.scrollY);
+  });
+
+  restore_scroll_position();
+
 })
 
-function update_review_override_votes() {
-  const review = document.querySelector("#id_is_reviewer")
-  if (review) {
-    setVisibility("label[for=id_review_override_votes]", review.checked)
-    setVisibility("#id_review_override_votes", review.checked)
-    setVisibility("#id_review_override_votes + small", review.checked)
-  }
+function restore_scroll_position() {
+    var oldScrollY = sessionStorage.getItem('scroll-position');
+
+    if (oldScrollY) {
+        window.scroll(window.scrollX, Math.max(oldScrollY, window.innerHeight));
+        sessionStorage.removeItem('scroll-position');
+    }
 }
+
+function simplifyText(text) {
+  const start = text.indexOf("(")
+  if (start == -1) return text
+  return text.substr(0, start).trim()
+}
+
 function update_multi_select_caption(element) {
-  var checkboxes = element.querySelectorAll(".checkbox")
+  var checkboxes = element.querySelectorAll(".form-check")
+
   checkboxes = Array.from(checkboxes).filter(element => {
     return element.querySelector("input[type=checkbox]").checked
   })
   const text = checkboxes
-    .map(box => box.querySelector("label").innerHTML)
+    .map(box => simplifyText(box.querySelector("label").innerHTML))
     .join(", ")
   const title = element.querySelector(".multi-select-title")
   if (text) {
@@ -107,26 +100,6 @@ function update_multi_select_caption(element) {
   } else {
     title.innerHTML = title.dataset.title
   }
-}
-
-function question_page_toggle_view() {
-  const variant = document.querySelector("#id_variant").value
-  setVisibility(
-    "#answer-options",
-    variant === "choices" || variant === "multiple_choice"
-  )
-  setVisibility(
-    "#alert-required-boolean",
-    variant === "boolean" && document.querySelector("#id_required").checked
-  )
-  setVisibility("#limit-length", variant === "text" || variant === "string")
-}
-
-function question_page_toggle_tracks_view() {
-  setVisibility(
-    "#limit-submission",
-    document.querySelector("#id_target").value === "submission"
-  )
 }
 
 function getCookie(name) {
@@ -143,13 +116,4 @@ function getCookie(name) {
     }
   }
   return cookieValue
-}
-
-function setVisibility(element, value) {
-  if (typeof element === "string") {
-    element = document.querySelector(element)
-  }
-  if (element) {
-    element.style.display = value ? "" : "none"
-  }
 }

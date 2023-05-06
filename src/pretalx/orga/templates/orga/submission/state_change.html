@@ -1,24 +1,33 @@
 {% extends "orga/submission/base.html" %}
 {% load i18n %}
+{% load bootstrap4 %}
 
 {% block submission_content %}
-    {% trans "Do you really want to change the state of this submission?" %}
-    {% include "cfp/event/fragment_state.html" with state=submission.state %}
-    <i class="fa fa-arrow-right"></i>
-    {% include "cfp/event/fragment_state.html" with state=target %}
     <form method="post">
-        {% csrf_token %}
-        <input type="hidden" name="next" value="{{ next }}">
+        <div class="ml-auto mr-auto col-md-8">
+            <h3>
+                {% include "cfp/event/fragment_state.html" with state=submission.state %}
+                <i class="fa fa-arrow-right"></i>
+                {% include "cfp/event/fragment_state.html" with state=target %}
+            </h3>
+            <p>
+                {% translate "Please confirm that you really want to change the state of this proposal." %}
+            </p>
+
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ next }}">
+            {% bootstrap_field form.pending %}
+        </div>
 
         <div class="submit-group" id="submission-state-change"><span></span><span>
             <a
-              class="btn btn-lg btn-outline-info"
-              href="{% if request.GET.next %}{{ request.GET.next }}{% else %}{{ submission.orga_urls.base }}{% endif %}"
+                class="btn btn-lg btn-outline-info"
+                href="{% if request.GET.next %}{{ request.GET.next }}{% else %}{{ submission.orga_urls.base }}{% endif %}"
             >
-                {% trans "Back" %}
+                {% translate "Back" %}
             </a>
             <button type="submit" class="btn btn-lg submission-state-{{ target }}">
-                {% trans "Do it" %}
+                {% translate "Do it" %}
             </button>
         </span></div>
     </form>

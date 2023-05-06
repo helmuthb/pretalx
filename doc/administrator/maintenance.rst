@@ -29,7 +29,7 @@ These commands update pretalx first, then the database, then the static files.
 Once you have executed these steps without seeing any errors, do not forget to
 restart your service(s)::
 
-    $ pip3 install --user -U pretalx
+    $ pip3 install --user --upgrade-strategy eager -U pretalx
     $ python -m pretalx migrate
     $ python -m pretalx rebuild
     $ python -m pretalx regenerate_css
@@ -43,16 +43,16 @@ If you want to upgrade pretalx to a specific release, you can pin the version
 in the pip command. Substitute ``pretalx`` with ``pretalx==1.2.3`` in the pip
 install line above like this::
 
-    $ pip3 install --user pretalx==1.2.3
+    $ pip3 install --user --upgrade-strategy eager pretalx==1.2.3
 
 Installing a commit or a branch version
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 If you're sure that you know what you're doing, you can also install a specific
-commit or branch of pretalx. You can replace ``master`` with a short or long
+commit or branch of pretalx. You can replace ``main`` with a short or long
 commit ID for a specific commit::
 
-    $ pip3 install --user -U "git+git://github.com/pretalx/pretalx.git@master#egg=pretalx&subdirectory=src"
+    $ pip3 install --user --upgrade-strategy eager -U "git+https://github.com/pretalx/pretalx.git@main#egg=pretalx&subdirectory=src"
 
 
 Backups
@@ -61,12 +61,12 @@ Backups
 There are two things which you should create backups of:
 
 Database
-
     Your SQL database (SQLite, MySQL or PostgreSQL). This is critical and you
     must **always always create automatic backups of your database**. There are
     tons of tutorials on the internet on how to do this, and the process
     depends on the choice of your database. For MySQL, see ``mysqldump`` and
-    for PostgreSQL, see the ``pg_dump`` tool. You should create a cronjob or
+    for PostgreSQL, see the ``pg_dump`` tool. For SQLite, it is sufficient to
+    create a backup of the database file. You should create a cronjob or
     timer that does the backups for you on a regular schedule. Do not forget to
     add another one to rotate your backups.
 

@@ -18,7 +18,9 @@ speakers                              list                       A list of speak
 created                               string                     The time of submission creation as an ISO-8601 formatted datetime. Available if the requesting user has organiser permission.
 title                                 string                     The submission's title
 submission_type                       string                     The submission type (e.g. "talk", "workshop")
+submission_type_id                    number                     ID of the submission type
 track                                 string                     The track this talk belongs to (e.g. "security", "design", or ``null``)
+track_id                              number                     ID of the track this talk belongs to (e.g. "security", "design", or ``null``)
 state                                 string                     The submission's state, one of "submitted", "accepted", "rejected", "confirmed"
 abstract                              string                     The abstract, a short note of the submission's content
 description                           string                     The description, a more expansive description of the submission's content
@@ -26,12 +28,26 @@ duration                              number                     The talk's dura
 do_not_record                         boolean                    Indicates if the speaker consent to recordings of their talk
 is_featured                           boolean                    Indicates if the talk is show in the schedule preview / sneak peek
 content_locale                        string                     The language the submission is in, e.g. "en" or "de"
-slot                                  object                     An object with the scheduling details, e.g. ``{"start": …, "end": …, "room": "R101"}`` if they exist.
+slot                                  object                     An object with the scheduling details, e.g. ``{"start": …, "end": …, "room": "R101", "room_id": 12}`` if they exist. This will not be present til after the schedule is released.
 slot_count                            number                     How often this submission may be scheduled.
-answers                               list                       The question answers given by the speakers. Available if the requesting user has organiser permissions.
+answers                               list                       The question answers given by the speakers. Available if the requesting user has organiser permissions, and if the ``questions`` query parameter is passed.
 notes                                 string                     Notes the speaker left for the organisers. Available if the requesting user has organiser permissions.
 internal_notes                        string                     Notes the organisers left on the submission. Available if the requesting user has organiser permissions.
+tags                                  list                       The tags attached to the current submission, as a list of strings. Available if the requesting user has organiser or reviewer permissions.
+tag_ids                               list                       The tags attached to the current submission, as a list of IDs. Available if the requesting user has organiser or reviewer permissions.
 ===================================== ========================== =======================================================
+
+.. versionadded:: 1.1.0
+   The ``resources`` field for file uploads was added in pretalx v1.1.0.
+
+.. versionadded:: 2.2.0
+   The ``tags`` field was added in pretalx v2.2.0.
+
+.. versionadded:: 3.0.0
+   The ``track_id``, ``tag_ids`` and ``submission_type_id`` fields were added, as well as the ``room_id`` field in the ``slot`` object.
+
+.. versionchanged:: 3.0.0
+   The ``answers`` field was turned off by default in pretalx v3.0.0. Pass the ``questions`` query parameter to see questions, and pass ``questions=all`` to get the previous behaviour.
 
 Endpoints
 ---------
@@ -68,6 +84,7 @@ Endpoints
             "speakers": [{"name": "Jane", "code": "DEFAB", "biography": ""}],
             "title": "A talk",
             "submission_type": "talk",
+            "submission_type_id": 12,
             "state": "confirmed",
             "abstract": "A good talk.",
             "description": "I will expand upon the properties of the talk, primarily its high quality.",
@@ -78,7 +95,8 @@ Endpoints
             "slot": {
               "start": "2017-12-27T10:00:00Z",
               "end": "2017-12-27T10:30:00Z",
-              "room": "R101"
+              "room": "R101",
+              "room_id": 12
             }
           },
           "answers": [
@@ -93,7 +111,9 @@ Endpoints
             }
            ],
            "notes": "Please make sure you give me red M&Ms",
-           "internal_notes": "Absolutely no M&Ms, but cool proposal otherwise!"
+           "internal_notes": "Absolutely no M&Ms, but cool proposal otherwise!",
+           "tags": ["science"],
+           "tag_ids": [5]
         ]
       }
 
@@ -102,6 +122,7 @@ Endpoints
    :query q: Search through submissions by title and speaker name
    :query submission_type: Filter submissions by submission type
    :query state: Filter submission by state
+   :query questions: Pass a comma separated list of question IDs to load, or the string 'all' to return all answers.
 
 .. http:get:: /api/events/(event)/talks/{code}
 
@@ -127,6 +148,7 @@ Endpoints
         "speakers": [{"name": "Jane", "code": "DEFAB", "biography": ""}],
         "title": "A talk",
         "submission_type": "talk",
+        "submission_type_id": 12,
         "state": "confirmed",
         "abstract": "A good talk.",
         "description": "I will expand upon the properties of the talk, primarily its high quality.",
@@ -137,7 +159,8 @@ Endpoints
         "slot": {
           "start": "2017-12-27T10:00:00Z",
           "end": "2017-12-27T10:30:00Z",
-          "room": "R101"
+          "room": "R101",
+          "room_id": 12
         },
         "answers": [
           {
@@ -151,11 +174,14 @@ Endpoints
           }
          ],
          "notes": "Please make sure you give me red M&Ms",
-         "internal_notes": "Absolutely no M&Ms, but cool proposal otherwise!"
+         "internal_notes": "Absolutely no M&Ms, but cool proposal otherwise!",
+         "tags": ["science"],
+         "tag_ids": [5]
       }
 
    :param event: The ``slug`` field of the event to fetch
    :param code: The ``code`` field of the submission to fetch
+   :query questions: Pass a comma separated list of question IDs to load, or the string 'all' to return all answers.
    :statuscode 200: no error
    :statuscode 401: Authentication failure
    :statuscode 403: The requested event does not exist **or** you have no permission to view it.

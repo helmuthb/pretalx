@@ -1,15 +1,17 @@
 document.addEventListener("DOMContentLoaded", function() {
-  "use strict"
 
   $("input.availabilities-editor-data").each(function() {
     var data_field = $(this)
+    var data = JSON.parse(data_field.attr("value"))
+
     var editor = $('<div class="availabilities-editor">')
     editor.attr("data-name", data_field.attr("name"))
     data_field.after(editor)
+    editor.before($(`<div class="availabilities-tz-hint">${data.event.timezone}</div>`))
 
     function save_events() {
       data = {
-        availabilities: editor.fullCalendar("clientEvents").map(function(e) {
+        availabilities: calendar.getEvents().map(function(e) {
           if (e.allDay) {
             return {
               start: e.start.format("YYYY-MM-DD HH:mm:ss"),
@@ -27,96 +29,86 @@ document.addEventListener("DOMContentLoaded", function() {
     }
 
     var editable = !Boolean(data_field.attr("disabled"))
+    const constraints = data.constraints || null
 
-    var data = JSON.parse(data_field.attr("value"))
+    const slotDuration = data.resolution || "00:30:00"
     var events = data.availabilities.map(function(e) {
-      e.start = moment(e.start).tz(data.event.timezone)
-      e.end = moment(e.end).tz(data.event.timezone)
-
-      if (e.start.format("HHmmss") == 0 && e.end.format("HHmmss") == 0) {
+      const start = moment(e.start)
+      const end = moment(e.end)
+      if (start.format("HHmmss") == 0 && end.format("HHmmss") == 0) {
         e.allDay = true
       }
-
+      e.start = start.toISOString()
+      e.end = end.toISOString()
       return e
     })
-    editor.fullCalendar({
-      views: {
-        agendaVariableDays: {
-          type: "agenda",
-          duration: {
-            days:
-              moment(data.event.date_to).diff(
-                moment(data.event.date_from),
-                "days"
-              ) + 1,
-          },
-        },
+    let localeData = document.querySelector("#calendar-locale")
+    const locale = localeData ? localeData.dataset.locale : "en"
+    const calendar = new FullCalendar.Calendar(editor[0], {
+      timeZone: data.event.timezone,
+      locale: locale,
+      initialView: 'timeGrid',
+      headerToolbar: {},
+      initialDate: data.event.date_from,
+      duration: {
+        days: moment(data.event.date_to).diff(moment(data.event.date_from), 'days') + 1,
       },
-      defaultView: "agendaVariableDays",
-      defaultDate: data.event.date_from,
-      visibleRange: {
-        start: data.event.date_from,
-        end: data.event.date_to,
-      },
+      headerToolbar: false,
       events: events,
-      nowIndicator: false,
-      navLinks: false,
-      header: false,
-      timeFormat: "H:mm",
-      slotLabelFormat: "H:mm",
+      slotDuration: slotDuration,
+      slotLabelFormat: {
+        hour: "numeric",
+        minute: "2-digit",
+        omitZeroMinute: false,
+        hour12: false,
+      },
+      eventTimeFormat: {
+        hour: "numeric",
+        minute: "2-digit",
+        omitZeroMinute: false,
+        hour12: false,
+      },    
       scrollTime: "09:00:00",
       selectable: editable,
-      selectHelper: true,
-      select: function(start, end) {
-        var wasInDeleteMode = false
-        editor.fullCalendar("clientEvents").forEach(function(e) {
-          if (e.className.indexOf("delete") >= 0) {
-            wasInDeleteMode = true
-          }
-          e.className = ""
-          editor.fullCalendar("updateEvent", e)
-        })
-
-        if (wasInDeleteMode) {
-          editor.fullCalendar("unselect")
-          return
-        }
-
-        var eventData = {
-          start: start,
-          end: end,
-        }
-        editor.fullCalendar("renderEvent", eventData, true)
-        editor.fullCalendar("unselect")
-        save_events()
-      },
-      eventResize: save_events,
-      eventDrop: save_events,
       editable: editable,
+      eventStartEditable: editable,
+      eventDurationEditable: editable,
       selectOverlap: false,
       eventOverlap: false,
-      eventColor: "#00DD00",
-      eventClick: function(calEvent, jsEvent, view) {
+      allDayMaintainDuration: true,
+      eventsSet: save_events,
+      eventColor: "#3aa57c",
+      eventConstraint: constraints,
+      selectConstraint: constraints,
+      businessHours: constraints,
+      select: function(info) {
+        if (document.querySelector(".availabilities-editor .fc-event.delete")) {
+          document.querySelectorAll(".availabilities-editor .fc-event.delete").forEach(function(e) { e.classList.remove("delete") })
+          return
+        }
+        const eventData = {
+          start: info.start,
+          end: info.end,
+        }
+        calendar.addEvent(eventData)
+        calendar.unselect()
+      },
+      eventClick: function(info) {
         if (!editable) {
           return
         }
-
-        if (calEvent.className.indexOf("delete") >= 0) {
-          editor.fullCalendar("removeEvents", function(searchEvent) {
-            return searchEvent._id === calEvent._id
-          })
+        if (info.el.classList.contains("delete")) {
+          info.event.remove()
           save_events()
         } else {
-          editor.fullCalendar("clientEvents").forEach(function(e) {
-            if (e._id == calEvent._id) {
-              e.className = "delete"
-            } else {
-              e.className = ""
-            }
-            editor.fullCalendar("updateEvent", e)
-          })
+          info.el.classList.add("delete")
         }
       },
     })
+    // initialDate is not respected, so we have to set it manually
+    calendar.gotoDate(data.event.date_from)
+    calendar.render()
+    // not sure why the calendar doesn't render properly without this. Has to be in a timeout, though!
+    setTimeout(function() {calendar.updateSize() }, 20)
   })
 })
